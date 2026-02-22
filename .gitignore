@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+#VS code
+*.code-workspace
+
+# Output folders
+噗浪JS圖片備份_精確分類/
+
+# Backup data (user's personal data)
+data/
+backup/
+
+
+# OS
+.DS_Store
+Thumbs.db
+tmp/
+msg.txt
