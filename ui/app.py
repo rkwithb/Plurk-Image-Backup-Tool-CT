@@ -42,13 +42,14 @@ CLR_ENTRY_BORDER = "#555555"
 CLR_PROGRESS_BG  = "#2d2d2d"  # dark / "#e2e8f0" light
 CLR_BTN_PRIMARY  = "#64748b"  # primary action button background
 CLR_BTN_HOVER    = "#333333"  # primary action button hover
-
 class FolderRow(ctk.CTkFrame):
     """
     Reusable row widget: label + path entry + browse button.
     """
-    def __init__(self, master, label: str, default_path: str = "", **kwargs):
+    def __init__(self, master, label: str, default_path: str = "",
+                 on_change=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
+        self._on_change = on_change
 
         self.columnconfigure(1, weight=1)
 
@@ -92,6 +93,8 @@ class FolderRow(ctk.CTkFrame):
         chosen = filedialog.askdirectory(title="選擇資料夾")
         if chosen:
             self._var.set(chosen)
+            if self._on_change:
+                self._on_change(chosen)  # notify parent of selection
 
     @property
     def path(self) -> Path:
@@ -179,7 +182,10 @@ class App(ctk.CTk):
             text_color=CLR_ACCENT,
         ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 6))
 
-        self._data_row = FolderRow(panel, "你的噗浪備份資料夾")
+        self._data_row = FolderRow(
+            panel, "你的噗浪備份資料夾",
+            on_change=self._on_data_dir_change,
+        )
         self._data_row.grid(row=1, column=0, sticky="ew", padx=16, pady=4)
 
         ctk.CTkLabel(
@@ -190,8 +196,18 @@ class App(ctk.CTk):
             anchor="w",
         ).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 4))
 
-        self._output_row = FolderRow(panel, "輸出資料夾", default_path="噗浪JS圖片備份_精確分類")
-        self._output_row.grid(row=3, column=0, sticky="ew", padx=16, pady=4)
+        # Readonly entry shows resolved output path — stretches with window width
+        self._output_path_var = ctk.StringVar(value="圖檔存在（請先選擇你的噗浪備份資料夾）")
+        ctk.CTkEntry(
+            panel,
+            textvariable=self._output_path_var,
+            state="readonly",
+            font=ctk.CTkFont(family="monospace", size=14),
+            fg_color=CLR_BG,
+            border_color=CLR_BG,
+            text_color=CLR_TEXT,
+            height=34,
+        ).grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 4))
 
         # EXIF option
         exif_row = ctk.CTkFrame(panel, fg_color="transparent")
@@ -301,6 +317,16 @@ class App(ctk.CTk):
         self._start_btn.grid(row=5, column=0, sticky="ew", padx=20, pady=16)
 
     # ------------------------------------------------------------------
+    # Input dir change callback
+    # ------------------------------------------------------------------
+
+    def _on_data_dir_change(self, chosen: str):
+        """Update output path entry when user selects input dir."""
+        output = Path(chosen) / "plurk_images_by_date"
+        text=f"圖檔將儲存在：{output}"
+        self._output_path_var.set(text)
+
+    # ------------------------------------------------------------------
     # Log helpers
     # ------------------------------------------------------------------
 
@@ -338,7 +364,8 @@ class App(ctk.CTk):
         data_dir      = self._data_row.path
         plurks_dir    = data_dir / "data" / "plurks"
         responses_dir = data_dir / "data" / "responses"
-        output_root   = self._output_row.path
+        # Output is always created inside the selected backup folder
+        output_root   = data_dir / "plurk_images_by_date"
         do_exif       = self._exif_var.get()
 
         # Reset UI
