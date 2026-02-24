@@ -25,23 +25,27 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 # ==========================================
-# Colour palette (easy to retheme later)
+# Colour palette — dark theme
 # ==========================================
-CLR_BG          = "#0f1117"   # main background
-CLR_PANEL       = "#1a1d27"   # card / panel background
-CLR_ACCENT      = "#4f8ef7"   # primary blue accent
-CLR_ACCENT2     = "#7c3aed"   # purple accent for progress
-CLR_TEXT        = "#e2e8f0"   # primary text
-CLR_SUBTEXT     = "#64748b"   # secondary / hint text
-CLR_SUCCESS     = "#22c55e"   # success green
-CLR_WARN        = "#f59e0b"   # warning amber
-CLR_ERROR       = "#ef4444"   # error red
-CLR_BORDER      = "#2d3148"   # subtle border
-
+CLR_BG          = "#000000"   # main background
+CLR_PANEL       = "#1a1a1a"   # subtle panel background
+CLR_ACCENT      = "#ffffff"   # primary text / accent (light on dark)
+CLR_ACCENT2     = "#818cf8"   # blue accent for progress bar
+CLR_TEXT        = "#ffffff"   # primary text
+CLR_SUBTEXT     = "#cccccc"   # secondary / hint text (grey stays grey)
+CLR_SUCCESS     = "#16a34a"   # success green
+CLR_WARN        = "#d97706"   # warning amber
+CLR_ERROR       = "#dc2626"   # error red
+CLR_BORDER      = "#ffffff"   # nav-style border (inverted)
+CLR_DIVIDER     = "#ffffff"   # stat row divider lines (inverted)
+CLR_ENTRY_BORDER = "#555555"
+CLR_PROGRESS_BG  = "#2d2d2d"  # dark / "#e2e8f0" light
+CLR_BTN_PRIMARY  = "#64748b"  # primary action button background
+CLR_BTN_HOVER    = "#333333"  # primary action button hover
 
 class FolderRow(ctk.CTkFrame):
     """
-    Reusable row widget: label + readonly path entry + browse button.
+    Reusable row widget: label + path entry + browse button.
     """
     def __init__(self, master, label: str, default_path: str = "", **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -62,24 +66,24 @@ class FolderRow(ctk.CTkFrame):
             self,
             textvariable=self._var,
             placeholder_text="請選擇噗浪備份資料夾...",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=14),
             fg_color=CLR_BG,
-            border_color=CLR_BORDER,
+            border_color=CLR_ENTRY_BORDER,
             text_color=CLR_TEXT,
             height=34,
         )
         self._entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
 
-        # Browse button
+        # Browse button — minimal style matching Choose BG concept
         ctk.CTkButton(
             self, text="選擇",
             width=60, height=34,
-            fg_color=CLR_PANEL,
-            hover_color=CLR_ACCENT,
-            border_color=CLR_BORDER,
+            fg_color="transparent",
+            hover_color=CLR_BTN_HOVER,
+            border_color=CLR_ENTRY_BORDER,
             border_width=1,
             text_color=CLR_TEXT,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=14),
             command=self._browse,
         ).grid(row=0, column=2, sticky="e")
 
@@ -96,9 +100,11 @@ class FolderRow(ctk.CTkFrame):
 
 class StatCard(ctk.CTkFrame):
     """
-    Small stat display card: icon + number + description.
+    Stat display card with subtle background and rounded corners.
+    Top/bottom border lines are handled by the parent stats_wrapper.
     """
     def __init__(self, master, icon: str, label: str, color: str, **kwargs):
+        # Light panel background with rounded corners
         super().__init__(master, fg_color=CLR_PANEL, corner_radius=10, **kwargs)
 
         self._var = ctk.StringVar(value="0")
@@ -150,7 +156,7 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             header,
-            text="🌊  噗浪圖片備份工具",
+            text="  噗浪圖片備份工具",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color=CLR_TEXT,
         ).grid(row=0, column=0, pady=16, padx=24, sticky="w")
@@ -158,7 +164,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(
             header,
             text="Plurk Image Backup Organizer",
-            font=ctk.CTkFont(family="monospace", size=11),
+            font=ctk.CTkFont(family="monospace", size=14),
             text_color=CLR_SUBTEXT,
         ).grid(row=0, column=1, pady=16, padx=24, sticky="e")
 
@@ -169,19 +175,17 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             panel, text="資料夾設定",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=14, weight="bold"),
             text_color=CLR_ACCENT,
         ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 6))
 
-        # Single data folder picker — app checks data/plurks and data/responses inside
-        self._data_row = FolderRow(panel, "你的噗浪備份資料夾", )
+        self._data_row = FolderRow(panel, "你的噗浪備份資料夾")
         self._data_row.grid(row=1, column=0, sticky="ew", padx=16, pady=4)
 
-        # Hint text showing expected subfolder structure
         ctk.CTkLabel(
             panel,
             text="　　請選擇噗浪備份的最上層資料夾（內含 data/plurks/ 與 data/responses/）",
-            font=ctk.CTkFont(family="monospace", size=11),
+            font=ctk.CTkFont(family="monospace", size=14),
             text_color=CLR_SUBTEXT,
             anchor="w",
         ).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 4))
@@ -200,11 +204,10 @@ class App(ctk.CTk):
             variable=self._exif_var,
             font=ctk.CTkFont(size=12),
             text_color=CLR_TEXT,
-            progress_color=CLR_ACCENT,
+            progress_color=CLR_ACCENT2,
         )
         self._exif_switch.pack(side="left")
 
-        # Disable if piexif not available
         if not is_exif_available():
             self._exif_switch.configure(state="disabled")
             ctk.CTkLabel(
@@ -231,7 +234,7 @@ class App(ctk.CTk):
             font=ctk.CTkFont(family="monospace", size=11),
             fg_color=CLR_BG,
             text_color=CLR_TEXT,
-            border_color=CLR_BORDER,
+            border_color=CLR_ENTRY_BORDER,
             border_width=1,
             wrap="word",
             state="disabled",
@@ -241,7 +244,7 @@ class App(ctk.CTk):
         # ── Progress Bar ─────────────────────────────────────────
         self._progress = ctk.CTkProgressBar(
             self,
-            fg_color=CLR_PANEL,
+            fg_color=CLR_PROGRESS_BG,
             progress_color=CLR_ACCENT2,
             height=6,
             corner_radius=3,
@@ -249,21 +252,39 @@ class App(ctk.CTk):
         self._progress.grid(row=3, column=0, sticky="ew", padx=20, pady=(8, 0))
         self._progress.set(0)
 
-        # ── Stat Cards ───────────────────────────────────────────
-        stats_row = ctk.CTkFrame(self, fg_color="transparent")
-        stats_row.grid(row=4, column=0, sticky="ew", padx=20, pady=(10, 0))
+        # ── Stat Cards with nav-style top/bottom border ──────────
+        # Outer wrapper provides the top and bottom 1px black border
+        stats_wrapper = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        stats_wrapper.grid(row=4, column=0, sticky="ew", padx=20, pady=(10, 0))
+        stats_wrapper.columnconfigure(0, weight=1)
+
+        # Top border line
+        ctk.CTkFrame(
+            stats_wrapper, fg_color=CLR_DIVIDER,
+            height=1, corner_radius=0
+        ).grid(row=0, column=0, sticky="ew")
+
+        # Inner row holding 4 cards equally spaced
+        stats_row = ctk.CTkFrame(stats_wrapper, fg_color="transparent", corner_radius=0)
+        stats_row.grid(row=1, column=0, sticky="ew")
         for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
-        self._card_dl    = StatCard(stats_row, "📥", "下載完成", CLR_SUCCESS)
-        self._card_skip  = StatCard(stats_row, "⏭️",  "略過已存在", CLR_SUBTEXT)
-        self._card_exif  = StatCard(stats_row, "🕒", "EXIF 更新", CLR_ACCENT)
-        self._card_fail  = StatCard(stats_row, "❌", "下載失敗", CLR_ERROR)
+        self._card_dl   = StatCard(stats_row, "📥", "下載完成", CLR_SUCCESS)
+        self._card_skip = StatCard(stats_row, "⏭️",  "略過已存在", CLR_SUBTEXT)
+        self._card_exif = StatCard(stats_row, "🕒", "EXIF 更新", CLR_ACCENT2)
+        self._card_fail = StatCard(stats_row, "❌", "下載失敗", CLR_ERROR)
 
         self._card_dl.grid  (row=0, column=0, sticky="ew", padx=(0, 6))
         self._card_skip.grid(row=0, column=1, sticky="ew", padx=3)
         self._card_exif.grid(row=0, column=2, sticky="ew", padx=3)
         self._card_fail.grid(row=0, column=3, sticky="ew", padx=(6, 0))
+
+        # Bottom border line
+        ctk.CTkFrame(
+            stats_wrapper, fg_color=CLR_DIVIDER,
+            height=1, corner_radius=0
+        ).grid(row=2, column=0, sticky="ew")
 
         # ── Start Button ─────────────────────────────────────────
         self._start_btn = ctk.CTkButton(
@@ -271,8 +292,8 @@ class App(ctk.CTk):
             text="▶  開始備份",
             height=44,
             font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color=CLR_ACCENT,
-            hover_color="#3b6fd4",
+            fg_color=CLR_BTN_PRIMARY,
+            hover_color=CLR_BTN_HOVER,
             text_color="#ffffff",
             corner_radius=10,
             command=self._start,
@@ -320,7 +341,7 @@ class App(ctk.CTk):
         output_root   = self._output_row.path
         do_exif       = self._exif_var.get()
 
-        # Reset UI first
+        # Reset UI
         self._clear_log()
         self._progress.set(0)
         self._card_dl.set(0)
@@ -328,7 +349,6 @@ class App(ctk.CTk):
         self._card_exif.set(0)
         self._card_fail.set(0)
 
-        # Check subfolders and report in log panel
         plurks_ok    = plurks_dir.exists()
         responses_ok = responses_dir.exists()
 
@@ -365,7 +385,6 @@ class App(ctk.CTk):
                 on_log=self._append_log,
                 on_progress=self._on_progress,
             )
-            # Update UI on main thread when done
             self.after(0, lambda: self._on_done(stats))
 
         threading.Thread(target=worker, daemon=True).start()
