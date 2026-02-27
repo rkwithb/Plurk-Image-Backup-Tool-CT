@@ -5,6 +5,10 @@
 from datetime import datetime
 from pathlib import Path
 
+from core.logger import get_logger
+
+logger = get_logger()
+
 # Try to import piexif, make it optional
 try:
     import piexif
@@ -25,7 +29,7 @@ def write_exif_time(file_path: Path, dt_obj: datetime) -> bool:
     Skips non-JPEG files and when piexif is unavailable.
     Returns True if EXIF was written/updated, False otherwise.
     """
-    # Only process JPEG files and when piexif is available
+    # Skip non-JPEG files silently — expected behaviour, no log needed
     if not PIEXIF_AVAILABLE or file_path.suffix.lower() not in ['.jpg', '.jpeg']:
         return False
 
@@ -40,26 +44,38 @@ def write_exif_time(file_path: Path, dt_obj: datetime) -> bool:
 
         # Skip if timestamp is already correct
         if current_time_str == target_time_str:
+            logger.debug(f"exif already correct, skipping: {file_path.name}")
             return False
 
         # Update all three EXIF time fields for consistency
-        exif_dict["0th"][piexif.ImageIFD.DateTime] = target_time_str
-        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = target_time_str
-        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = target_time_str
+        exif_dict["0th"][piexif.ImageIFD.DateTime]             = target_time_str
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal]     = target_time_str
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized]    = target_time_str
         piexif.insert(piexif.dump(exif_dict), str(file_path))
+
+        logger.debug(f"exif updated ({target_time_str}): {file_path.name}")
         return True
 
-    except Exception:
-        # If existing EXIF block is malformed or missing, create a new one
+    except Exception as e:
+        # Existing EXIF block is malformed or missing — fall back to writing a new block
+        logger.warning(
+            f"exif load failed, attempting fresh write: {file_path.name} — {type(e).__name__}: {e}"
+        )
         try:
             new_exif = {
-                "0th": {piexif.ImageIFD.DateTime: target_time_str},
+                "0th":  {piexif.ImageIFD.DateTime: target_time_str},
                 "Exif": {
-                    piexif.ExifIFD.DateTimeOriginal: target_time_str,
+                    piexif.ExifIFD.DateTimeOriginal:  target_time_str,
                     piexif.ExifIFD.DateTimeDigitized: target_time_str,
                 }
             }
             piexif.insert(piexif.dump(new_exif), str(file_path))
+            logger.debug(f"exif fresh write OK ({target_time_str}): {file_path.name}")
             return True
-        except Exception:
+
+        except Exception as e2:
+            # Complete EXIF write failure — file may be locked or corrupted
+            logger.error(
+                f"exif write failed completely: {file_path.name} — {type(e2).__name__}: {e2}"
+            )
             return False

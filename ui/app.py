@@ -17,6 +17,7 @@ import customtkinter as ctk
 
 from core.processor import run_full_backup, ProcessStats
 from core.exif_handler import is_exif_available
+from core.logger import setup_logger, get_logger
 
 # ==========================================
 # Theme & Appearance
@@ -27,21 +28,23 @@ ctk.set_default_color_theme("blue")
 # ==========================================
 # Colour palette — dark theme
 # ==========================================
-CLR_BG          = "#000000"   # main background
-CLR_PANEL       = "#1a1a1a"   # subtle panel background
-CLR_ACCENT      = "#ffffff"   # primary text / accent (light on dark)
-CLR_ACCENT2     = "#818cf8"   # blue accent for progress bar
-CLR_TEXT        = "#ffffff"   # primary text
-CLR_SUBTEXT     = "#cccccc"   # secondary / hint text (grey stays grey)
-CLR_SUCCESS     = "#16a34a"   # success green
-CLR_WARN        = "#d97706"   # warning amber
-CLR_ERROR       = "#dc2626"   # error red
-CLR_BORDER      = "#ffffff"   # nav-style border (inverted)
-CLR_DIVIDER     = "#ffffff"   # stat row divider lines (inverted)
+CLR_BG           = "#000000"   # main background
+CLR_PANEL        = "#1a1a1a"   # subtle panel background
+CLR_ACCENT       = "#ffffff"   # primary text / accent (light on dark)
+CLR_ACCENT2      = "#818cf8"   # blue accent for progress bar
+CLR_TEXT         = "#ffffff"   # primary text
+CLR_SUBTEXT      = "#cccccc"   # secondary / hint text
+CLR_SUCCESS      = "#16a34a"   # success green
+CLR_WARN         = "#d97706"   # warning amber
+CLR_ERROR        = "#dc2626"   # error red
+CLR_BORDER       = "#ffffff"   # nav-style border
+CLR_DIVIDER      = "#ffffff"   # stat row divider lines
 CLR_ENTRY_BORDER = "#555555"
-CLR_PROGRESS_BG  = "#2d2d2d"  # dark / "#e2e8f0" light
-CLR_BTN_PRIMARY  = "#64748b"  # primary action button background
-CLR_BTN_HOVER    = "#333333"  # primary action button hover
+CLR_PROGRESS_BG  = "#2d2d2d"
+CLR_BTN_PRIMARY  = "#64748b"   # primary action button background
+CLR_BTN_HOVER    = "#333333"   # primary action button hover
+
+
 class FolderRow(ctk.CTkFrame):
     """
     Reusable row widget: label + path entry + browse button.
@@ -75,7 +78,7 @@ class FolderRow(ctk.CTkFrame):
         )
         self._entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
 
-        # Browse button — minimal style matching Choose BG concept
+        # Browse button — minimal style
         ctk.CTkButton(
             self, text="選擇",
             width=60, height=34,
@@ -94,7 +97,7 @@ class FolderRow(ctk.CTkFrame):
         if chosen:
             self._var.set(chosen)
             if self._on_change:
-                self._on_change(chosen)  # notify parent of selection
+                self._on_change(chosen)
 
     @property
     def path(self) -> Path:
@@ -104,10 +107,8 @@ class FolderRow(ctk.CTkFrame):
 class StatCard(ctk.CTkFrame):
     """
     Stat display card with subtle background and rounded corners.
-    Top/bottom border lines are handled by the parent stats_wrapper.
     """
     def __init__(self, master, icon: str, label: str, color: str, **kwargs):
-        # Light panel background with rounded corners
         super().__init__(master, fg_color=CLR_PANEL, corner_radius=10, **kwargs)
 
         self._var = ctk.StringVar(value="0")
@@ -142,7 +143,15 @@ class App(ctk.CTk):
         self.minsize(640, 580)
         self.configure(fg_color=CLR_BG)
 
+        # Initialize file logger at app launch — before any UI is built
+        self._log_path = setup_logger(mode="GUI")
+        self._logger   = get_logger()
+        self._logger.info("App initialized — UI starting up")
+
         self._build_ui()
+
+        # Log the startup completion with resolved log path shown in UI
+        self._logger.info(f"UI ready — log file: {self._log_path}")
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -196,7 +205,7 @@ class App(ctk.CTk):
             anchor="w",
         ).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 4))
 
-        # Readonly entry shows resolved output path — stretches with window width
+        # Readonly entry shows resolved output path
         self._output_path_var = ctk.StringVar(value="圖檔存在（請先選擇你的噗浪備份資料夾）")
         ctk.CTkEntry(
             panel,
@@ -224,6 +233,7 @@ class App(ctk.CTk):
         )
         self._exif_switch.pack(side="left")
 
+        # Disable switch if piexif is not installed
         if not is_exif_available():
             self._exif_switch.configure(state="disabled")
             ctk.CTkLabel(
@@ -232,6 +242,7 @@ class App(ctk.CTk):
                 font=ctk.CTkFont(size=11),
                 text_color=CLR_WARN,
             ).pack(side="left")
+            self._logger.warning("piexif not available — EXIF switch disabled")
 
         # ── Log Area ─────────────────────────────────────────────
         log_frame = ctk.CTkFrame(self, fg_color=CLR_PANEL, corner_radius=12)
@@ -269,7 +280,6 @@ class App(ctk.CTk):
         self._progress.set(0)
 
         # ── Stat Cards with nav-style top/bottom border ──────────
-        # Outer wrapper provides the top and bottom 1px black border
         stats_wrapper = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
         stats_wrapper.grid(row=4, column=0, sticky="ew", padx=20, pady=(10, 0))
         stats_wrapper.columnconfigure(0, weight=1)
@@ -280,16 +290,16 @@ class App(ctk.CTk):
             height=1, corner_radius=0
         ).grid(row=0, column=0, sticky="ew")
 
-        # Inner row holding 4 cards equally spaced
+        # Inner row holding 4 stat cards
         stats_row = ctk.CTkFrame(stats_wrapper, fg_color="transparent", corner_radius=0)
         stats_row.grid(row=1, column=0, sticky="ew")
         for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
-        self._card_dl   = StatCard(stats_row, "📥", "下載完成", CLR_SUCCESS)
+        self._card_dl   = StatCard(stats_row, "📥", "下載完成",   CLR_SUCCESS)
         self._card_skip = StatCard(stats_row, "⏭️",  "略過已存在", CLR_SUBTEXT)
-        self._card_exif = StatCard(stats_row, "🕒", "EXIF 更新", CLR_ACCENT2)
-        self._card_fail = StatCard(stats_row, "❌", "下載失敗", CLR_ERROR)
+        self._card_exif = StatCard(stats_row, "🕒", "EXIF 更新",  CLR_ACCENT2)
+        self._card_fail = StatCard(stats_row, "❌", "下載失敗",   CLR_ERROR)
 
         self._card_dl.grid  (row=0, column=0, sticky="ew", padx=(0, 6))
         self._card_skip.grid(row=0, column=1, sticky="ew", padx=3)
@@ -321,17 +331,23 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _on_data_dir_change(self, chosen: str):
-        """Update output path entry when user selects input dir."""
+        """Update output path display and log the user's folder selection."""
         output = Path(chosen) / "plurk_images_by_date"
-        text=f"圖檔將儲存在：{output}"
-        self._output_path_var.set(text)
+        self._output_path_var.set(f"圖檔將儲存在：{output}")
+        # Log user's folder selection for session traceability
+        self._logger.info(f"User selected input folder: {chosen}")
+        self._logger.info(f"Resolved output folder: {output}")
 
     # ------------------------------------------------------------------
-    # Log helpers
+    # Log helpers — UI panel only (file logging is separate)
     # ------------------------------------------------------------------
 
     def _append_log(self, msg: str):
-        """Append a line to the log textbox (thread-safe via after())."""
+        """
+        Append a friendly message to the UI log textbox (thread-safe).
+        This is the on_log callback passed to run_full_backup().
+        File logging is handled separately by each core module.
+        """
         def _write():
             self._log_box.configure(state="normal")
             self._log_box.insert("end", msg + "\n")
@@ -340,6 +356,7 @@ class App(ctk.CTk):
         self.after(0, _write)
 
     def _clear_log(self):
+        """Clear the UI log textbox."""
         self._log_box.configure(state="normal")
         self._log_box.delete("1.0", "end")
         self._log_box.configure(state="disabled")
@@ -364,7 +381,6 @@ class App(ctk.CTk):
         data_dir      = self._data_row.path
         plurks_dir    = data_dir / "data" / "plurks"
         responses_dir = data_dir / "data" / "responses"
-        # Output is always created inside the selected backup folder
         output_root   = data_dir / "plurk_images_by_date"
         do_exif       = self._exif_var.get()
 
@@ -376,8 +392,18 @@ class App(ctk.CTk):
         self._card_exif.set(0)
         self._card_fail.set(0)
 
+        # Log backup run parameters before starting
+        self._logger.info("--- Backup run started ---")
+        self._logger.info(f"Input  : {data_dir}")
+        self._logger.info(f"Output : {output_root}")
+        self._logger.info(f"EXIF   : {do_exif}")
+
         plurks_ok    = plurks_dir.exists()
         responses_ok = responses_dir.exists()
+
+        # Log folder check results
+        self._logger.info(f"plurks/    exists: {plurks_ok}")
+        self._logger.info(f"responses/ exists: {responses_ok}")
 
         self._append_log("🔍 檢查資料夾結構...")
         self._append_log(f"   {'✅' if plurks_ok    else '❌'} {plurks_dir}")
@@ -386,12 +412,15 @@ class App(ctk.CTk):
 
         if not plurks_ok and not responses_ok:
             self._append_log("⚠️ 找不到 plurks/ 與 responses/ 子資料夾，請確認所選的備份資料夾是否正確。")
+            self._logger.error("Abort: neither plurks/ nor responses/ found")
             return
 
         if not plurks_ok:
             self._append_log("💡 找不到 plurks/ 子資料夾，將只處理 responses/。")
+            self._logger.warning("plurks/ not found — processing responses/ only")
         if not responses_ok:
             self._append_log("💡 找不到 responses/ 子資料夾，將只處理 plurks/。")
+            self._logger.warning("responses/ not found — processing plurks/ only")
         self._append_log("")
 
         self._start_btn.configure(state="disabled", text="執行中...")
@@ -424,6 +453,13 @@ class App(ctk.CTk):
         self._card_exif.set(stats.exif_updated)
         self._card_fail.set(stats.failed)
 
+        # Log final stats to file
+        self._logger.info("--- Backup run completed ---")
+        self._logger.info(f"Downloaded : {stats.downloaded}")
+        self._logger.info(f"Skipped    : {stats.skipped}")
+        self._logger.info(f"Failed     : {stats.failed}")
+        self._logger.info(f"EXIF       : {stats.exif_updated}")
+
         self._append_log("")
         self._append_log("=" * 36)
         self._append_log("✨ 備份完成！")
@@ -438,7 +474,7 @@ class App(ctk.CTk):
 
 
 # ==========================================
-# Entry point for UI mode
+# Entry point for GUI mode
 # ==========================================
 def main():
     app = App()

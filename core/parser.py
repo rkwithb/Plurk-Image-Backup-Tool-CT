@@ -1,12 +1,16 @@
 # Copyright (c) 2026 rkwithb (https://github.com/rkwithb)
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
-# Disclaimer: Use at your own risk. The author is not responsible for any damages.
+# Disclaimer: Use at your own risk. The author is not responsible for any diseases.
 
 import re
 import json
 from pathlib import Path
 
-# Regex: exclude official plurk stickers, match general image files
+from core.logger import get_logger
+
+logger = get_logger()
+
+# Regex: exclude official Plurk stickers, match general image files
 PLURK_EMOJI_PATTERN = re.compile(r'https://images\.plurk\.com/mx_')
 GENERAL_IMAGE_PATTERN = re.compile(r'https?://[^\s"\'\\]+\.(?:jpg|png|gif|jpeg)', re.IGNORECASE)
 
@@ -24,6 +28,7 @@ def parse_js_content(file_path: Path) -> list:
             # Find the '=' sign to locate the JSON array
             eq_index = raw_text.find('=')
             if eq_index == -1:
+                logger.warning(f"parse_js_content: no '=' found in file — {file_path}")
                 return []
 
             json_part = raw_text[eq_index + 1:].strip()
@@ -33,11 +38,23 @@ def parse_js_content(file_path: Path) -> list:
                 json_part = json_part[:-1].strip()
 
             result = json.loads(json_part, strict=False)
+
             # Only return if result is a list of dicts (plurks/responses format)
             if not isinstance(result, list):
+                logger.warning(f"parse_js_content: parsed result is not a list ({type(result).__name__}) — {file_path}")
                 return []
+
+            logger.debug(f"parse_js_content: OK — {file_path.name} ({len(result)} items)")
             return result
-    except Exception:
+
+    except json.JSONDecodeError as e:
+        logger.error(f"parse_js_content: JSON decode error in {file_path.name} — {e}")
+        return []
+    except OSError as e:
+        logger.error(f"parse_js_content: cannot read file {file_path} — {e}")
+        return []
+    except Exception as e:
+        logger.error(f"parse_js_content: unexpected error in {file_path.name} — {type(e).__name__}: {e}")
         return []
 
 

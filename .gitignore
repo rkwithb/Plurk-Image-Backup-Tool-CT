@@ -14,7 +14,7 @@ venv/
 # Backup data (user's personal data)
 data/
 backup/
-
+log/
 
 # OS
 .DS_Store
