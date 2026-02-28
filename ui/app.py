@@ -4,6 +4,7 @@
 
 import sys
 import threading
+import traceback
 from pathlib import Path
 from tkinter import filedialog
 
@@ -17,7 +18,7 @@ import customtkinter as ctk
 
 from core.processor import run_full_backup, ProcessStats
 from core.exif_handler import is_exif_available
-from core.logger import setup_logger, get_logger
+from core.logger import setup_logger, get_logger, shutdown_logger
 
 # ==========================================
 # Theme & Appearance
@@ -143,15 +144,181 @@ class App(ctk.CTk):
         self.minsize(640, 580)
         self.configure(fg_color=CLR_BG)
 
+        # Track whether a backup run is currently in progress.
+        # Set True when worker thread starts, False when _on_done() is called.
+        # Used by on_closing() to decide whether to show the confirmation dialog.
+        self._running: bool = False
+
         # Initialize file logger at app launch — before any UI is built
         self._log_path = setup_logger(mode="GUI")
         self._logger   = get_logger()
         self._logger.info("App initialized — UI starting up")
 
+        # Register exception hooks before building UI so any init error is captured
+        self._register_exception_hooks()
+
         self._build_ui()
 
-        # Log the startup completion with resolved log path shown in UI
+        # Hook window close button to our controlled shutdown handler
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
         self._logger.info(f"UI ready — log file: {self._log_path}")
+
+    # ------------------------------------------------------------------
+    # Exception hooks — catch unhandled errors in all threads
+    # ------------------------------------------------------------------
+
+    def _register_exception_hooks(self):
+        """
+        Register global exception handlers for both the main thread and
+        any background worker threads.
+
+        sys.excepthook:
+            Called when an unhandled exception reaches the top of the main thread.
+            Logs the full traceback, then lets Python exit normally.
+            Without this, the traceback prints to stderr but is never saved to the log.
+
+        threading.excepthook:
+            Called when an unhandled exception occurs inside any Thread.
+            In Python < 3.8, thread exceptions were silently swallowed entirely.
+            In Python >= 3.8, they print to stderr but still bypass sys.excepthook.
+            We capture them here, log the full traceback, and reset the UI state
+            so the Start button doesn't stay stuck in "執行中..." forever.
+        """
+        def _main_excepthook(exc_type, exc_value, exc_tb):
+            # Log the full traceback to file before exiting
+            tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            self._logger.critical(f"Unhandled exception in main thread:\n{tb_text}")
+            shutdown_logger(reason="exception")
+            # Fall through to Python's default handler (prints to stderr, exits)
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+        def _thread_excepthook(args):
+            # args.exc_type / args.exc_value / args.exc_traceback / args.thread
+            tb_text = "".join(
+                traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)
+            )
+            thread_name = args.thread.name if args.thread else "unknown"
+            self._logger.critical(
+                f"Unhandled exception in thread '{thread_name}':\n{tb_text}"
+            )
+            # Reset UI on the main thread — worker died without calling _on_done()
+            # so the Start button would be stuck disabled otherwise
+            self.after(0, self._on_worker_crash)
+
+        sys.excepthook          = _main_excepthook
+        threading.excepthook    = _thread_excepthook
+
+    def _on_worker_crash(self):
+        """
+        Called on the main thread when the worker thread died unexpectedly.
+        Resets UI to a recoverable state so the user can try again.
+        """
+        self._running = False
+        self._start_btn.configure(state="normal", text="▶  開始備份")
+        self._append_log("")
+        self._append_log("⚠️ 發生未預期的錯誤，備份已中斷。請查看 log 檔案以了解詳情。")
+        self._logger.error("Worker thread crashed — UI reset to idle state")
+
+    # ------------------------------------------------------------------
+    # Window close handler
+    # ------------------------------------------------------------------
+
+    def _on_closing(self):
+        """
+        Called when the user clicks the window close button (X).
+
+        If no backup is running:
+            Log session end and close immediately.
+
+        If a backup is running:
+            Show a confirmation dialog. If user confirms, log the interruption
+            and close. If user cancels, do nothing and let the backup continue.
+
+        Note: closing while a backup is running will kill the daemon worker thread
+        immediately. Any image currently mid-download will be lost. Completed
+        downloads are already saved to disk and are not affected.
+        """
+        if not self._running:
+            # Clean exit — no backup in progress
+            self._logger.info("User closed the window — no active run")
+            shutdown_logger(reason="user_closed")
+            self.destroy()
+            return
+
+        # Backup is running — show confirmation dialog
+        self._show_close_confirm_dialog()
+
+    def _show_close_confirm_dialog(self):
+        """
+        Display an on-theme CTkToplevel confirmation dialog when the user
+        tries to close the window during an active backup run.
+        Blocks interaction with the main window until dismissed.
+        """
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("確認離開")
+        dialog.geometry("360x160")
+        dialog.resizable(False, False)
+        dialog.configure(fg_color=CLR_PANEL)
+
+        # Keep dialog on top and block main window interaction
+        dialog.transient(self)
+        dialog.grab_set()
+
+        # Warning message
+        ctk.CTkLabel(
+            dialog,
+            text="備份進行中，確定要離開？",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=CLR_TEXT,
+        ).pack(pady=(28, 4))
+
+        ctk.CTkLabel(
+            dialog,
+            text="未完成的下載將會中斷。",
+            font=ctk.CTkFont(size=12),
+            text_color=CLR_SUBTEXT,
+        ).pack(pady=(0, 20))
+
+        # Button row
+        btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_row.pack()
+
+        def _confirm():
+            # User chose to quit mid-run — log the interruption then exit
+            self._logger.warning(
+                "User closed the window during an active backup run — session interrupted"
+            )
+            shutdown_logger(reason="interrupted")
+            dialog.destroy()
+            self.destroy()
+
+        def _cancel():
+            # User changed their mind — dismiss dialog, backup continues
+            self._logger.info("User dismissed close dialog — backup continuing")
+            dialog.destroy()
+
+        ctk.CTkButton(
+            btn_row,
+            text="確定離開",
+            width=120, height=36,
+            fg_color=CLR_ERROR,
+            hover_color="#b91c1c",
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=13),
+            command=_confirm,
+        ).pack(side="left", padx=(0, 12))
+
+        ctk.CTkButton(
+            btn_row,
+            text="繼續備份",
+            width=120, height=36,
+            fg_color=CLR_BTN_PRIMARY,
+            hover_color=CLR_BTN_HOVER,
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=13),
+            command=_cancel,
+        ).pack(side="left")
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -334,7 +501,6 @@ class App(ctk.CTk):
         """Update output path display and log the user's folder selection."""
         output = Path(chosen) / "plurk_images_by_date"
         self._output_path_var.set(f"圖檔將儲存在：{output}")
-        # Log user's folder selection for session traceability
         self._logger.info(f"User selected input folder: {chosen}")
         self._logger.info(f"Resolved output folder: {output}")
 
@@ -401,7 +567,6 @@ class App(ctk.CTk):
         plurks_ok    = plurks_dir.exists()
         responses_ok = responses_dir.exists()
 
-        # Log folder check results
         self._logger.info(f"plurks/    exists: {plurks_ok}")
         self._logger.info(f"responses/ exists: {responses_ok}")
 
@@ -431,6 +596,9 @@ class App(ctk.CTk):
         self._append_log(f"   EXIF 補寫：{'是' if do_exif else '否'}")
         self._append_log("")
 
+        # Mark run as active before spawning the thread
+        self._running = True
+
         # Run backup in background thread to keep UI responsive
         def worker():
             stats: ProcessStats = run_full_backup(
@@ -443,10 +611,13 @@ class App(ctk.CTk):
             )
             self.after(0, lambda: self._on_done(stats))
 
-        threading.Thread(target=worker, daemon=True).start()
+        threading.Thread(target=worker, daemon=True, name="backup-worker").start()
 
     def _on_done(self, stats: ProcessStats):
-        """Called on main thread when backup completes."""
+        """Called on main thread when backup completes normally."""
+        # Mark run as finished — on_closing() will no longer show the dialog
+        self._running = False
+
         self._progress.set(1)
         self._card_dl.set(stats.downloaded)
         self._card_skip.set(stats.skipped)

@@ -8,8 +8,18 @@ core/logger.py
 Centralized singleton logger for plurk-image-dl-ct.
 - Call setup_logger() once at app launch (GUI or CLI).
 - All other modules use get_logger() to obtain the shared logger instance.
+- Call shutdown_logger() before exiting to flush and close the file cleanly.
 - Log files are written to <program_folder>/log/session_YYYYMMDD_HHMMSS.log
 - Works in both script mode and PyInstaller frozen .exe mode.
+
+Buffering strategy:
+  The file is opened in line-buffered mode (buffering=1).
+  This means every log line is flushed to disk immediately after being written,
+  rather than accumulating in an 8KB memory buffer first.
+  Trade-off: slightly more disk write operations, but each line is guaranteed
+  on disk before the next one is written — critical for crash/kill scenarios
+  where a full-buffer flush would never happen.
+  Performance impact is negligible since the bottleneck is network I/O, not disk.
 """
 
 import logging
@@ -43,9 +53,9 @@ def _build_session_header(log_path: Path, mode: str) -> str:
     Build a structured session header block written at the top of each log file.
     Captures environment snapshot for easy debugging.
     """
-    now      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    os_info  = f"{platform.system()} {platform.release()}"
-    py_ver   = platform.python_version()
+    now     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    os_info = f"{platform.system()} {platform.release()}"
+    py_ver  = platform.python_version()
 
     lines = [
         "=" * 56,
@@ -73,6 +83,8 @@ def setup_logger(mode: str = "GUI") -> Path:
     Behaviour:
         - Creates <program_folder>/log/ if it does not exist.
         - Names the file session_YYYYMMDD_HHMMSS.log.
+        - Opens the file in line-buffered mode (buffering=1) so every line
+          is written to disk immediately — safe against crashes and force-kills.
         - Writes a session header block as the first entry.
         - Subsequent calls are no-ops (returns the existing log path).
     """
@@ -95,9 +107,17 @@ def setup_logger(mode: str = "GUI") -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path  = log_folder / f"session_{timestamp}.log"
 
-    # File handler — UTF-8 to safely handle CJK characters in paths
-    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    # Open file in line-buffered mode (buffering=1):
+    # Each log line is flushed to disk immediately after writing.
+    # Default FileHandler would buffer ~8KB in memory before flushing —
+    # meaning the last N lines before a crash or force-kill could be lost.
+    log_file     = open(log_path, "a", encoding="utf-8", buffering=1)
+    file_handler = logging.StreamHandler(log_file)
     file_handler.setLevel(logging.DEBUG)
+
+    # Store the file object reference for clean shutdown later
+    file_handler._log_file = log_file
+    file_handler._log_path = str(log_path)
 
     # Log format: timestamp [LEVEL ] [module] message
     formatter = logging.Formatter(
@@ -107,15 +127,41 @@ def setup_logger(mode: str = "GUI") -> Path:
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    # Store log path on the handler for later retrieval
-    file_handler._log_path = str(log_path)
-
     # Write session header as first log entry
     header = _build_session_header(log_path, mode)
     logger.info("\n" + header)
 
     _initialized = True
     return log_path
+
+
+def shutdown_logger(reason: str = "normal") -> None:
+    """
+    Flush and close the log file cleanly before the app exits.
+    Should be called from on_closing() or any exit path.
+
+    Args:
+        reason: short label recorded as the final log line.
+                Use "normal" for clean exit, "user_closed" for window close,
+                "interrupted" for mid-run close, "exception" for crash exit.
+
+    Note: After shutdown_logger() is called, further log calls will be silent
+    since all handlers are removed. This is intentional — it is the last thing
+    called before the process exits.
+    """
+    logger = logging.getLogger(_LOGGER_NAME)
+    logger.info(f"--- Session ended ({reason}) ---")
+
+    # Flush and close all handlers, then remove them from the logger
+    for handler in logger.handlers[:]:
+        try:
+            handler.flush()
+            if hasattr(handler, "_log_file"):
+                handler._log_file.close()
+            handler.close()
+        except Exception:
+            pass
+        logger.removeHandler(handler)
 
 
 def get_logger() -> logging.Logger:
@@ -132,10 +178,10 @@ def get_logger() -> logging.Logger:
 
 def _get_existing_log_path(logger: logging.Logger) -> Path:
     """
-    Retrieve the log file path from an already-initialized logger's file handler.
-    Returns a fallback Path if no file handler is found.
+    Retrieve the log file path from an already-initialized logger's StreamHandler.
+    Returns a fallback Path if no handler with a stored path is found.
     """
     for handler in logger.handlers:
-        if isinstance(handler, logging.FileHandler):
-            return Path(handler.baseFilename)
+        if hasattr(handler, "_log_path"):
+            return Path(handler._log_path)
     return Path("log/unknown.log")
