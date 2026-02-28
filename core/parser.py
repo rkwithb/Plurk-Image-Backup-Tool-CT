@@ -85,6 +85,25 @@ def get_all_valid_images(text_content: str) -> set:
         if "avatars.plurk.com" in low_url:
             continue
 
+        # Skip Plurk emoticons served from s.plurk.com/emoticons — tiny GIFs
+        # (basic, silver, gold, platinum tiers). Same rationale as emos.plurk.com —
+        # Plurk's emoticon CDN, not user-uploaded content.
+        if "s.plurk.com/emoticons" in low_url:
+            continue
+
+        # Skip Plurk auto-generated medium thumbnails (_mt suffix).
+        # Plurk generates _mt.jpg as a smaller version of every uploaded image.
+        # The full-size original (without _mt) is the version worth downloading
+        # and will be captured separately from the same post content.
+        if "imgs.plurk.com" in low_url and "_mt.jpg" in low_url:
+            continue
+
+        # Skip YouTube default thumbnails (120x90px, ~3-5KB) — always too small.
+        # Only filter the 'default.jpg' variant to preserve larger thumbnails
+        # (mqdefault, hqdefault, maxresdefault) in case they are ever linked directly.
+        if "i.ytimg.com" in low_url and "default.jpg" in low_url:
+            continue
+
         # Skip official Plurk stickers (mx_ prefix)
         if "images.plurk.com" in low_url and PLURK_EMOJI_PATTERN.search(url):
             continue

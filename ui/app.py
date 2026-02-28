@@ -464,7 +464,7 @@ class App(ctk.CTk):
             stats_row.columnconfigure(i, weight=1)
 
         self._card_dl   = StatCard(stats_row, "📥", "下載完成",   CLR_SUCCESS)
-        self._card_skip = StatCard(stats_row, "⏭️",  "略過已存在", CLR_SUBTEXT)
+        self._card_skip = StatCard(stats_row, "⏭️",  "略過已存在/過小圖片", CLR_SUBTEXT)
         self._card_exif = StatCard(stats_row, "🕒", "EXIF 更新",  CLR_ACCENT2)
         self._card_fail = StatCard(stats_row, "❌", "下載失敗",   CLR_ERROR)
 

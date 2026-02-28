@@ -151,15 +151,19 @@ def download_image(
             _record_failure(domain)
             return DownloadResult(failed=True)
 
-        # File too small — likely a thumbnail or placeholder returned as 200.
-        # This is our own content filter decision, not a server rejection.
-        # Do NOT call _record_failure() here — the server responded fine,
-        # there is no reason to penalise the domain or trigger backoff.
+        # File too small — likely a residual thumbnail or placeholder returned as 200.
+        # This is our own content filter decision, not a server rejection or error.
+        # Returned as skipped=True (not failed) because:
+        #   - The server responded correctly
+        #   - No backoff should be triggered
+        #   - It folds into the '略過已存在/過小圖片' stat alongside existing files,
+        #     which is accurate — both are intentional non-downloads, not failures
+        # Do NOT call _record_failure() here.
         if len(res.content) <= MIN_IMAGE_SIZE:
-            logger.warning(
-                f"download rejected (size {len(res.content)}B <= {MIN_IMAGE_SIZE}B): {url}"
+            logger.debug(
+                f"download skipped (size {len(res.content)}B <= {MIN_IMAGE_SIZE}B): {url}"
             )
-            return DownloadResult(failed=True)
+            return DownloadResult(skipped=True)
 
         # Write file to disk
         with open(save_path, "wb") as f:
