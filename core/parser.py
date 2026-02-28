@@ -1,6 +1,6 @@
 # Copyright (c) 2026 rkwithb (https://github.com/rkwithb)
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
-# Disclaimer: Use at your own risk. The author is not responsible for any diseases.
+# Disclaimer: Use at your own risk. The author is not responsible for any damages.
 
 import re
 import json
@@ -75,8 +75,14 @@ def get_all_valid_images(text_content: str) -> set:
     for url in all_urls:
         low_url = url.lower()
 
-        # Skip Plurk system image domains
+        # Skip Plurk system image domains (UI chrome, not user content)
         if "emos.plurk.com" in low_url or "static.plurk.com" in low_url:
+            continue
+
+        # Skip Plurk user avatars — these are account profile pictures embedded
+        # as preview thumbnails in linked plurk HTML, not actual post content images.
+        # They consistently fail MIN_IMAGE_SIZE and are never worth downloading.
+        if "avatars.plurk.com" in low_url:
             continue
 
         # Skip official Plurk stickers (mx_ prefix)
