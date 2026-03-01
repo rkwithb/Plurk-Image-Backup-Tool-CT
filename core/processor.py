@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from core.parser import parse_js_content, get_all_valid_images
-from core.downloader import download_image, DownloadResult
+from core.downloader import download_image, DownloadResult, DELAY_BETWEEN_REQUESTS
 from core.logger import get_logger
 
 logger = get_logger()
@@ -36,6 +36,87 @@ class ProcessStats:
         self.failed      += other.failed
         return self
 
+
+@dataclass
+class PrescanStats:
+    """
+    Statistics from a pre-scan pass (read-only, no downloads).
+    new_urls_count:      total URLs that would be newly downloaded.
+    existing_files_count: total URLs pointing to files that already exist.
+    """
+    new_urls_count: int = 0
+    existing_files_count: int = 0
+
+
+def prescan_folder(
+    source_dir: Path,
+    output_root: Path,
+    label: str,
+) -> PrescanStats:
+    """
+    Perform a lightweight read-only scan of all JS backup files in source_dir
+    to count URLs that would be newly downloaded vs already existing.
+    Uses the same filtering as process_folder() to ensure accurate counts.
+
+    Parameters:
+        source_dir:   Path to folder containing Plurk JS backup files.
+        output_root:  Root path where dated subfolders would be created.
+        label:        Display label for logging (e.g. '主噗' / '回應').
+
+    Returns a PrescanStats dataclass with new_urls_count and existing_files_count.
+    """
+    stats = PrescanStats()
+
+    if not source_dir.exists():
+        logger.debug(f"prescan_folder [{label}]: source dir not found, skipping — {source_dir}")
+        return stats
+
+    # Collect all JS files
+    js_files = list(source_dir.glob("*.js"))
+    total_files = len(js_files)
+
+    logger.debug(f"prescan_folder [{label}]: scanning {total_files} JS files")
+
+    for js_file in js_files:
+        items = parse_js_content(js_file)
+
+        if not items:
+            logger.debug(f"prescan_folder [{label}]: no items parsed from {js_file.name}")
+            continue
+
+        for item in items:
+            posted_date = item.get("posted", "")
+            try:
+                dt = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
+                # Organize into dated subfolders (YYYY-MM-DD)
+                date_folder = output_root / dt.strftime("%Y-%m-%d")
+            except ValueError:
+                logger.debug(
+                    f"prescan_folder [{label}]: invalid date '{posted_date}' in {js_file.name}"
+                )
+                continue
+
+            # Combine content and content_raw for image URL extraction
+            content = (item.get("content", "") or "") + " " + (item.get("content_raw", "") or "")
+            urls = get_all_valid_images(content)
+
+            for url in urls:
+                # Extract filename from URL, strip query string
+                file_name = url.split('/')[-1].split('?')[0]
+                save_path = date_folder / file_name
+
+                # Check if file already exists
+                if save_path.exists():
+                    stats.existing_files_count += 1
+                else:
+                    stats.new_urls_count += 1
+
+    logger.debug(
+        f"prescan_folder [{label}]: done — "
+        f"new_urls={stats.new_urls_count} existing={stats.existing_files_count}"
+    )
+
+    return stats
 
 def process_folder(
     source_dir: Path,
@@ -138,6 +219,33 @@ def process_folder(
     )
 
     return stats
+
+
+def run_full_prescan(
+    plurks_dir: Path,
+    responses_dir: Path,
+    output_root: Path,
+) -> PrescanStats:
+    """
+    Run prescan for both plurks and responses folders.
+    Returns merged PrescanStats from both scans.
+    """
+    logger.info(f"run_full_prescan: starting")
+
+    plurks_stats = prescan_folder(plurks_dir, output_root, "主噗")
+    responses_stats = prescan_folder(responses_dir, output_root, "回應")
+
+    merged = PrescanStats(
+        new_urls_count=plurks_stats.new_urls_count + responses_stats.new_urls_count,
+        existing_files_count=plurks_stats.existing_files_count + responses_stats.existing_files_count,
+    )
+
+    logger.info(
+        f"run_full_prescan: done — "
+        f"new_urls={merged.new_urls_count} existing={merged.existing_files_count}"
+    )
+
+    return merged
 
 
 def run_full_backup(

@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import customtkinter as ctk
 
-from core.processor import run_full_backup, ProcessStats
+from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
 from core.exif_handler import is_exif_available
 from core.logger import setup_logger, get_logger, shutdown_logger
 
@@ -417,11 +417,14 @@ class App(ctk.CTk):
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(
+        # Header label — combines "執行紀錄" and estimate text in single widget
+        # This avoids layout pressure from multiple columns affecting log window size
+        self._header_label = ctk.CTkLabel(
             log_frame, text="執行紀錄",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=CLR_ACCENT,
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
+        )
+        self._header_label.grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
 
         self._log_box = ctk.CTkTextbox(
             log_frame,
@@ -508,6 +511,20 @@ class App(ctk.CTk):
     # Log helpers — UI panel only (file logging is separate)
     # ------------------------------------------------------------------
 
+    def _set_header_info(self, info_text: str):
+        """
+        Update the header label with info text (thread-safe).
+        If info_text is empty, show only "執行紀錄".
+        Otherwise show "執行紀錄                {info_text}".
+        Called from worker thread, so use after() for safety.
+        """
+        def _update():
+            if info_text:
+                self._header_label.configure(text=f"執行紀錄                {info_text}")
+            else:
+                self._header_label.configure(text="執行紀錄")
+        self.after(0, _update)
+
     def _append_log(self, msg: str):
         """
         Append a friendly message to the UI log textbox (thread-safe).
@@ -557,6 +574,7 @@ class App(ctk.CTk):
         self._card_skip.set(0)
         self._card_exif.set(0)
         self._card_fail.set(0)
+        self._set_header_info("")  # Clear header info at start of new run
 
         # Log backup run parameters before starting
         self._logger.info("--- Backup run started ---")
@@ -601,6 +619,36 @@ class App(ctk.CTk):
 
         # Run backup in background thread to keep UI responsive
         def worker():
+            # Step 1: Run prescan to count files that need to be downloaded
+            try:
+                self._append_log("🔍 掃描新增圖片...")
+                prescan_stats: PrescanStats = run_full_prescan(
+                    plurks_dir=plurks_dir,
+                    responses_dir=responses_dir,
+                    output_root=output_root,
+                )
+
+                total_new = prescan_stats.new_urls_count
+                total_existing = prescan_stats.existing_files_count
+
+                self._logger.info(
+                    f"Prescan result: new_urls={total_new} existing={total_existing}"
+                )
+
+                # Display file counts in label and log
+                files_text = f"準備下載 {total_new} 張新圖片，{total_existing} 張已存在"
+                self._set_header_info(files_text)
+
+                self._append_log(f"掃描完成：{files_text}")
+                self._append_log("")
+
+            except Exception as e:
+                # Prescan failed — log error to file and UI, but proceed with backup anyway
+                self._logger.warning(f"Prescan failed: {type(e).__name__}: {e}")
+                self._append_log(f"⚠️ 掃描出錯，將繼續執行備份...")
+                self._append_log("")
+
+            # Step 2: Run full backup (this is the main operation)
             stats: ProcessStats = run_full_backup(
                 plurks_dir=plurks_dir,
                 responses_dir=responses_dir,
