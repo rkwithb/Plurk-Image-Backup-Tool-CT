@@ -105,7 +105,7 @@ def download_image(
 ) -> DownloadResult:
     """
     Download a single image to target_folder.
-    Skips if file alfix(parser,downloader,app): skip YouTube default thumbnails from i.ytimg.com, emoticons and _mt thumbnails, and reclassify size-reject as skippedready exists (optionally updates EXIF).
+    Skips if file already exists (optionally updates EXIF).
     Rejects files smaller than MIN_IMAGE_SIZE to filter out broken images.
 
     Delay behaviour:
