@@ -23,7 +23,7 @@ MIN_IMAGE_SIZE = 5120
 
 # Fixed polite delay between every successful download request (seconds).
 # Applied after a successful download only — not on skip, backoff, or failure.
-DELAY_BETWEEN_REQUESTS = 0.5
+DELAY_BETWEEN_REQUESTS = 0.1
 
 # Backoff duration when server responds with HTTP 429 Too Many Requests (seconds).
 # Replaces the normal delay — not added on top of it.
@@ -105,7 +105,7 @@ def download_image(
 ) -> DownloadResult:
     """
     Download a single image to target_folder.
-    Skips if file already exists (optionally updates EXIF).
+    Skips if file alfix(parser,downloader,app): skip YouTube default thumbnails from i.ytimg.com, emoticons and _mt thumbnails, and reclassify size-reject as skippedready exists (optionally updates EXIF).
     Rejects files smaller than MIN_IMAGE_SIZE to filter out broken images.
 
     Delay behaviour:
