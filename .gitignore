@@ -10,6 +10,7 @@ venv/
 
 # Output folders
 噗浪JS圖片備份_精確分類/
+plurk_images_by_date/
 
 # Backup data (user's personal data)
 data/
