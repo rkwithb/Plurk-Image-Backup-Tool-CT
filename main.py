@@ -11,7 +11,7 @@ from pathlib import Path
 from core.processor import run_full_backup
 from core.exif_handler import is_exif_available
 from core.logger import setup_logger, get_logger, shutdown_logger
-from core.i18n import load_config, load_language, t
+from core.i18n import load_config, load_language, save_config, t, SUPPORTED_LANGUAGES
 
 # ==========================================
 # Windows stdout robustness initialization
@@ -49,9 +49,49 @@ def safe_input(prompt: str, default: str = "n") -> str:
         return default
 
 
+def _parse_lang_flag() -> str | None:
+    """
+    Parse --lang <code> from sys.argv.
+    Returns the language code if provided and valid, otherwise None.
+
+    Usage:
+        python main.py --lang en
+        python main.py --lang zh_TW
+    """
+    args = sys.argv[1:]
+    if "--lang" not in args:
+        return None
+
+    idx = args.index("--lang")
+
+    # --lang provided but no value follows it
+    if idx + 1 >= len(args):
+        print(f"Usage: python main.py --lang <code>")
+        print(f"Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}")
+        sys.exit(1)
+
+    lang = args[idx + 1]
+
+    # Validate against supported languages
+    if lang not in SUPPORTED_LANGUAGES:
+        print(f"Unknown language '{lang}'. Supported: {', '.join(SUPPORTED_LANGUAGES.keys())}")
+        sys.exit(1)
+
+    return lang
+
+
 def main():
-    # Load persisted language config and initialize translations before any output
-    lang = load_config()
+    # Parse --lang flag before loading config — flag takes priority and persists
+    lang_flag = _parse_lang_flag()
+
+    if lang_flag:
+        # Save the requested language to config.json so it persists for future runs
+        save_config(lang_flag)
+        lang = lang_flag
+    else:
+        # No flag — load from persisted config, defaulting to zh_TW on first run
+        lang = load_config()
+
     load_language(lang)
 
     # Initialize file logger at CLI launch — before any user interaction
@@ -72,6 +112,7 @@ def main():
     print(t("cli_divider"))
 
     logger.info("CLI started")
+    logger.info(f"Language : {lang}{' (--lang flag)' if lang_flag else ' (config)'}")
 
     # --- Folder settings ---
     plurks_dir    = DEFAULT_PLURKS_DIR
