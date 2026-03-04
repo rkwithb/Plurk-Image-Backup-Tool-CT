@@ -1,0 +1,69 @@
+{
+    "header_title":                     "噗浪圖片備份工具",
+    "folder_label_data":                "你的噗浪備份資料夾",
+    "folder_placeholder":               "請選擇噗浪備份資料夾...",
+    "btn_browse":                       "選擇",
+
+    "settings_title":                   "資料夾設定",
+    "settings_hint":                    "　　請選擇噗浪備份的最上層資料夾（內含 data/plurks/ 與 data/responses/）",
+    "output_path_placeholder":          "圖檔存在（請先選擇你的噗浪備份資料夾）",
+    "output_path_prefix":               "圖檔將儲存在：",
+
+    "exif_switch_label":                "補寫 EXIF 圖片時間（僅限 JPG）",
+    "exif_not_installed":               "（未安裝 piexif）",
+
+    "log_title":                        "執行紀錄",
+
+    "stat_downloaded":                  "下載完成",
+    "stat_skipped":                     "略過已存在/過小圖片",
+    "stat_exif":                        "EXIF 更新",
+    "stat_failed":                      "下載失敗",
+
+    "btn_start_backup":                 "▶  開始備份",
+    "btn_running":                      "執行中...",
+
+    "dialog_title_confirm_quit":        "確認離開",
+    "dialog_msg_backup_running":        "備份進行中，確定要離開？",
+    "dialog_msg_download_interrupted":  "未完成的下載將會中斷。",
+    "btn_confirm_quit":                 "確定離開",
+    "btn_continue_backup":              "繼續備份",
+
+    "log_checking_folders":             "🔍 檢查資料夾結構...",
+    "log_warn_no_folders":              "⚠️ 找不到 plurks/ 與 responses/ 子資料夾，請確認所選的備份資料夾是否正確。",
+    "log_warn_no_plurks":               "💡 找不到 plurks/ 子資料夾，將只處理 responses/。",
+    "log_warn_no_responses":            "💡 找不到 responses/ 子資料夾，將只處理 plurks/。",
+    "log_start_backup":                 "🚀 開始執行備份...",
+    "log_input_folder":                 "   備份資料夾：{path}",
+    "log_output_folder":                "   輸出資料夾：{path}",
+    "log_exif_label":                   "   EXIF 補寫：{value}",
+    "log_exif_enabled":                 "是",
+    "log_exif_disabled":                "否",
+
+    "log_scanning":                     "🔍 掃描新增圖片...",
+    "log_scan_summary":                 "掃描完成：準備下載 {new} 張新圖片，{existing} 張已存在",
+    "log_scan_error":                   "⚠️ 掃描出錯，將繼續執行備份...",
+
+    "log_worker_crash":                 "⚠️ 發生未預期的錯誤，備份已中斷。請查看 log 檔案以了解詳情。",
+
+    "log_done_title":                   "✨ 備份完成！",
+    "log_done_downloaded":              "   📥 新下載：{count} 張",
+    "log_done_skipped":                 "   ⏭️  略過：{count} 張",
+    "log_done_failed":                  "   ❌ 失敗：{count} 張",
+    "log_done_exif":                    "   🕒 EXIF 更新：{count} 張",
+
+    "proc_warn_no_source":              "⚠️ 找不到「{label}」資料夾，略過處理。",
+    "proc_processing_file":             "📂 [{label}] 正在處理：{filename}",
+    "proc_downloaded":                  "  📥 下載完成：{filename}",
+    "proc_failed":                      "  ❌ 下載失敗：{url}",
+    "proc_exif_updated":                "  🕒 已更新 EXIF 圖檔時間：{filename}",
+
+    "cli_title":                        "🚀 噗浪 JS 備份圖檔整理工具",
+    "cli_divider":                      "========================================",
+    "cli_exif_prompt":                  "👉 是否要檢查並補寫/覆蓋圖檔的 EXIF 圖片時間？(y/N)：",
+    "cli_no_piexif":                    "💡 提示：未安裝 piexif 模組，將以純下載模式執行。",
+    "cli_result_title":                 "✨ 備份整理結果：",
+    "cli_result_downloaded":            "  📥 新下載圖片：{count} 張",
+    "cli_result_skipped":               "  ⏭️  略過已存在/過小圖片：{count} 張",
+    "cli_result_failed":                "  ❌ 下載失敗：{count} 張",
+    "cli_result_exif":                  "  🕒 覆寫/校正 EXIF 標頭：{count} 張"
+}

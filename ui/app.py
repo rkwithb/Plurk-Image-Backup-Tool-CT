@@ -2,6 +2,7 @@
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
 # Disclaimer: Use at your own risk. The author is not responsible for any damages.
 
+import os
 import sys
 import threading
 import traceback
@@ -19,6 +20,7 @@ import customtkinter as ctk
 from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
 from core.exif_handler import is_exif_available
 from core.logger import setup_logger, get_logger, shutdown_logger
+from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
 
 # ==========================================
 # Theme & Appearance
@@ -70,7 +72,7 @@ class FolderRow(ctk.CTkFrame):
         self._entry = ctk.CTkEntry(
             self,
             textvariable=self._var,
-            placeholder_text="請選擇噗浪備份資料夾...",
+            placeholder_text=t("folder_placeholder"),
             font=ctk.CTkFont(size=14),
             fg_color=CLR_BG,
             border_color=CLR_ENTRY_BORDER,
@@ -81,7 +83,7 @@ class FolderRow(ctk.CTkFrame):
 
         # Browse button — minimal style
         ctk.CTkButton(
-            self, text="選擇",
+            self, text=t("btn_browse"),
             width=60, height=34,
             fg_color="transparent",
             hover_color=CLR_BTN_HOVER,
@@ -94,7 +96,7 @@ class FolderRow(ctk.CTkFrame):
 
     def _browse(self):
         """Open folder picker dialog and update entry."""
-        chosen = filedialog.askdirectory(title="選擇資料夾")
+        chosen = filedialog.askdirectory(title=t("folder_label_data"))
         if chosen:
             self._var.set(chosen)
             if self._on_change:
@@ -139,7 +141,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("噗浪圖片備份工具")
+        self.title(t("header_title"))
         self.geometry("720x680")
         self.minsize(640, 580)
         self.configure(fg_color=CLR_BG)
@@ -152,7 +154,7 @@ class App(ctk.CTk):
         # Initialize file logger at app launch — before any UI is built
         self._log_path = setup_logger(mode="GUI")
         self._logger   = get_logger()
-        self._logger.info("App initialized — UI starting up")
+        self._logger.info(f"App initialized — language={get_language()} UI starting up")
 
         # Register exception hooks before building UI so any init error is captured
         self._register_exception_hooks()
@@ -186,15 +188,12 @@ class App(ctk.CTk):
             so the Start button doesn't stay stuck in "執行中..." forever.
         """
         def _main_excepthook(exc_type, exc_value, exc_tb):
-            # Log the full traceback to file before exiting
             tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
             self._logger.critical(f"Unhandled exception in main thread:\n{tb_text}")
             shutdown_logger(reason="exception")
-            # Fall through to Python's default handler (prints to stderr, exits)
             sys.__excepthook__(exc_type, exc_value, exc_tb)
 
         def _thread_excepthook(args):
-            # args.exc_type / args.exc_value / args.exc_traceback / args.thread
             tb_text = "".join(
                 traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)
             )
@@ -203,11 +202,10 @@ class App(ctk.CTk):
                 f"Unhandled exception in thread '{thread_name}':\n{tb_text}"
             )
             # Reset UI on the main thread — worker died without calling _on_done()
-            # so the Start button would be stuck disabled otherwise
             self.after(0, self._on_worker_crash)
 
-        sys.excepthook          = _main_excepthook
-        threading.excepthook    = _thread_excepthook
+        sys.excepthook       = _main_excepthook
+        threading.excepthook = _thread_excepthook
 
     def _on_worker_crash(self):
         """
@@ -215,9 +213,9 @@ class App(ctk.CTk):
         Resets UI to a recoverable state so the user can try again.
         """
         self._running = False
-        self._start_btn.configure(state="normal", text="▶  開始備份")
+        self._start_btn.configure(state="normal", text=t("btn_start_backup"))
         self._append_log("")
-        self._append_log("⚠️ 發生未預期的錯誤，備份已中斷。請查看 log 檔案以了解詳情。")
+        self._append_log(t("log_worker_crash"))
         self._logger.error("Worker thread crashed — UI reset to idle state")
 
     # ------------------------------------------------------------------
@@ -240,13 +238,11 @@ class App(ctk.CTk):
         downloads are already saved to disk and are not affected.
         """
         if not self._running:
-            # Clean exit — no backup in progress
             self._logger.info("User closed the window — no active run")
             shutdown_logger(reason="user_closed")
             self.destroy()
             return
 
-        # Backup is running — show confirmation dialog
         self._show_close_confirm_dialog()
 
     def _show_close_confirm_dialog(self):
@@ -256,36 +252,32 @@ class App(ctk.CTk):
         Blocks interaction with the main window until dismissed.
         """
         dialog = ctk.CTkToplevel(self)
-        dialog.title("確認離開")
+        dialog.title(t("dialog_title_confirm_quit"))
         dialog.geometry("360x160")
         dialog.resizable(False, False)
         dialog.configure(fg_color=CLR_PANEL)
 
-        # Keep dialog on top and block main window interaction
         dialog.transient(self)
         dialog.grab_set()
 
-        # Warning message
         ctk.CTkLabel(
             dialog,
-            text="備份進行中，確定要離開？",
+            text=t("dialog_msg_backup_running"),
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=CLR_TEXT,
         ).pack(pady=(28, 4))
 
         ctk.CTkLabel(
             dialog,
-            text="未完成的下載將會中斷。",
+            text=t("dialog_msg_download_interrupted"),
             font=ctk.CTkFont(size=12),
             text_color=CLR_SUBTEXT,
         ).pack(pady=(0, 20))
 
-        # Button row
         btn_row = ctk.CTkFrame(dialog, fg_color="transparent")
         btn_row.pack()
 
         def _confirm():
-            # User chose to quit mid-run — log the interruption then exit
             self._logger.warning(
                 "User closed the window during an active backup run — session interrupted"
             )
@@ -294,13 +286,12 @@ class App(ctk.CTk):
             self.destroy()
 
         def _cancel():
-            # User changed their mind — dismiss dialog, backup continues
             self._logger.info("User dismissed close dialog — backup continuing")
             dialog.destroy()
 
         ctk.CTkButton(
             btn_row,
-            text="確定離開",
+            text=t("btn_confirm_quit"),
             width=120, height=36,
             fg_color=CLR_ERROR,
             hover_color="#b91c1c",
@@ -311,7 +302,7 @@ class App(ctk.CTk):
 
         ctk.CTkButton(
             btn_row,
-            text="繼續備份",
+            text=t("btn_continue_backup"),
             width=120, height=36,
             fg_color=CLR_BTN_PRIMARY,
             hover_color=CLR_BTN_HOVER,
@@ -319,6 +310,31 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=13),
             command=_cancel,
         ).pack(side="left")
+
+    # ------------------------------------------------------------------
+    # Language switcher
+    # ------------------------------------------------------------------
+
+    def _on_language_change(self, display_label: str):
+        """
+        Called when the user selects a new language from the dropdown.
+        Saves the selection to config.json and restarts the app to apply.
+        """
+        # Resolve selected language code from display label
+        selected_lang = next(
+            (code for code, label in SUPPORTED_LANGUAGES.items() if label == display_label),
+            None
+        )
+
+        if selected_lang is None or selected_lang == get_language():
+            return
+
+        self._logger.info(f"Language changed to '{selected_lang}' — restarting app")
+        save_config(selected_lang)
+        shutdown_logger(reason="language_change")
+
+        # Relaunch the process with the same arguments
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -331,21 +347,41 @@ class App(ctk.CTk):
         # ── Header ──────────────────────────────────────────────
         header = ctk.CTkFrame(self, fg_color=CLR_PANEL, corner_radius=0, height=64)
         header.grid(row=0, column=0, sticky="ew")
-        header.columnconfigure(0, weight=1)
+        header.columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
             header,
-            text="  噗浪圖片備份工具",
+            text=f"  {t('header_title')}",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color=CLR_TEXT,
         ).grid(row=0, column=0, pady=16, padx=24, sticky="w")
 
+        # Subtitle — fixed English, not translated
         ctk.CTkLabel(
             header,
             text="Plurk Image Backup Organizer",
             font=ctk.CTkFont(family="monospace", size=14),
             text_color=CLR_SUBTEXT,
-        ).grid(row=0, column=1, pady=16, padx=24, sticky="e")
+        ).grid(row=0, column=1, pady=16, padx=8, sticky="w")
+
+        # Language dropdown — right side of header
+        lang_options     = list(SUPPORTED_LANGUAGES.values())
+        current_label    = SUPPORTED_LANGUAGES.get(get_language(), lang_options[0])
+
+        self._lang_dropdown = ctk.CTkOptionMenu(
+            header,
+            values=lang_options,
+            command=self._on_language_change,
+            fg_color=CLR_PANEL,
+            button_color=CLR_BTN_PRIMARY,
+            button_hover_color=CLR_BTN_HOVER,
+            text_color=CLR_TEXT,
+            font=ctk.CTkFont(size=12),
+            width=110,
+            height=30,
+        )
+        self._lang_dropdown.set(current_label)
+        self._lang_dropdown.grid(row=0, column=2, pady=16, padx=24, sticky="e")
 
         # ── Settings Panel ───────────────────────────────────────
         panel = ctk.CTkFrame(self, fg_color=CLR_PANEL, corner_radius=12)
@@ -353,27 +389,27 @@ class App(ctk.CTk):
         panel.columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            panel, text="資料夾設定",
+            panel, text=t("settings_title"),
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=CLR_ACCENT,
         ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 6))
 
         self._data_row = FolderRow(
-            panel, "你的噗浪備份資料夾",
+            panel, t("folder_label_data"),
             on_change=self._on_data_dir_change,
         )
         self._data_row.grid(row=1, column=0, sticky="ew", padx=16, pady=4)
 
         ctk.CTkLabel(
             panel,
-            text="　　請選擇噗浪備份的最上層資料夾（內含 data/plurks/ 與 data/responses/）",
+            text=t("settings_hint"),
             font=ctk.CTkFont(family="monospace", size=14),
             text_color=CLR_SUBTEXT,
             anchor="w",
         ).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 4))
 
         # Readonly entry shows resolved output path
-        self._output_path_var = ctk.StringVar(value="圖檔存在（請先選擇你的噗浪備份資料夾）")
+        self._output_path_var = ctk.StringVar(value=t("output_path_placeholder"))
         ctk.CTkEntry(
             panel,
             textvariable=self._output_path_var,
@@ -389,10 +425,10 @@ class App(ctk.CTk):
         exif_row = ctk.CTkFrame(panel, fg_color="transparent")
         exif_row.grid(row=4, column=0, sticky="w", padx=16, pady=(10, 14))
 
-        self._exif_var = ctk.BooleanVar(value=False)
+        self._exif_var    = ctk.BooleanVar(value=False)
         self._exif_switch = ctk.CTkSwitch(
             exif_row,
-            text="補寫 EXIF 圖片時間（僅限 JPG）",
+            text=t("exif_switch_label"),
             variable=self._exif_var,
             font=ctk.CTkFont(size=12),
             text_color=CLR_TEXT,
@@ -405,7 +441,7 @@ class App(ctk.CTk):
             self._exif_switch.configure(state="disabled")
             ctk.CTkLabel(
                 exif_row,
-                text="  （未安裝 piexif）",
+                text=f"  {t('exif_not_installed')}",
                 font=ctk.CTkFont(size=11),
                 text_color=CLR_WARN,
             ).pack(side="left")
@@ -417,10 +453,8 @@ class App(ctk.CTk):
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(1, weight=1)
 
-        # Header label — combines "執行紀錄" and estimate text in single widget
-        # This avoids layout pressure from multiple columns affecting log window size
         self._header_label = ctk.CTkLabel(
-            log_frame, text="執行紀錄",
+            log_frame, text=t("log_title"),
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=CLR_ACCENT,
         )
@@ -454,29 +488,26 @@ class App(ctk.CTk):
         stats_wrapper.grid(row=4, column=0, sticky="ew", padx=20, pady=(10, 0))
         stats_wrapper.columnconfigure(0, weight=1)
 
-        # Top border line
         ctk.CTkFrame(
             stats_wrapper, fg_color=CLR_DIVIDER,
             height=1, corner_radius=0
         ).grid(row=0, column=0, sticky="ew")
 
-        # Inner row holding 4 stat cards
         stats_row = ctk.CTkFrame(stats_wrapper, fg_color="transparent", corner_radius=0)
         stats_row.grid(row=1, column=0, sticky="ew")
         for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
-        self._card_dl   = StatCard(stats_row, "📥", "下載完成",   CLR_SUCCESS)
-        self._card_skip = StatCard(stats_row, "⏭️",  "略過已存在/過小圖片", CLR_SUBTEXT)
-        self._card_exif = StatCard(stats_row, "🕒", "EXIF 更新",  CLR_ACCENT2)
-        self._card_fail = StatCard(stats_row, "❌", "下載失敗",   CLR_ERROR)
+        self._card_dl   = StatCard(stats_row, "📥", t("stat_downloaded"), CLR_SUCCESS)
+        self._card_skip = StatCard(stats_row, "⏭️",  t("stat_skipped"),    CLR_SUBTEXT)
+        self._card_exif = StatCard(stats_row, "🕒", t("stat_exif"),        CLR_ACCENT2)
+        self._card_fail = StatCard(stats_row, "❌", t("stat_failed"),      CLR_ERROR)
 
         self._card_dl.grid  (row=0, column=0, sticky="ew", padx=(0, 6))
         self._card_skip.grid(row=0, column=1, sticky="ew", padx=3)
         self._card_exif.grid(row=0, column=2, sticky="ew", padx=3)
         self._card_fail.grid(row=0, column=3, sticky="ew", padx=(6, 0))
 
-        # Bottom border line
         ctk.CTkFrame(
             stats_wrapper, fg_color=CLR_DIVIDER,
             height=1, corner_radius=0
@@ -485,7 +516,7 @@ class App(ctk.CTk):
         # ── Start Button ─────────────────────────────────────────
         self._start_btn = ctk.CTkButton(
             self,
-            text="▶  開始備份",
+            text=t("btn_start_backup"),
             height=44,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=CLR_BTN_PRIMARY,
@@ -503,7 +534,7 @@ class App(ctk.CTk):
     def _on_data_dir_change(self, chosen: str):
         """Update output path display and log the user's folder selection."""
         output = Path(chosen) / "plurk_images_by_date"
-        self._output_path_var.set(f"圖檔將儲存在：{output}")
+        self._output_path_var.set(t("output_path_prefix") + str(output))
         self._logger.info(f"User selected input folder: {chosen}")
         self._logger.info(f"Resolved output folder: {output}")
 
@@ -514,15 +545,14 @@ class App(ctk.CTk):
     def _set_header_info(self, info_text: str):
         """
         Update the header label with info text (thread-safe).
-        If info_text is empty, show only "執行紀錄".
-        Otherwise show "執行紀錄                {info_text}".
-        Called from worker thread, so use after() for safety.
+        If info_text is empty, show only the log title.
+        Otherwise append the info text to the log title.
         """
         def _update():
             if info_text:
-                self._header_label.configure(text=f"執行紀錄                {info_text}")
+                self._header_label.configure(text=f"{t('log_title')}                {info_text}")
             else:
-                self._header_label.configure(text="執行紀錄")
+                self._header_label.configure(text=t("log_title"))
         self.after(0, _update)
 
     def _append_log(self, msg: str):
@@ -574,9 +604,8 @@ class App(ctk.CTk):
         self._card_skip.set(0)
         self._card_exif.set(0)
         self._card_fail.set(0)
-        self._set_header_info("")  # Clear header info at start of new run
+        self._set_header_info("")
 
-        # Log backup run parameters before starting
         self._logger.info("--- Backup run started ---")
         self._logger.info(f"Input  : {data_dir}")
         self._logger.info(f"Output : {output_root}")
@@ -588,67 +617,62 @@ class App(ctk.CTk):
         self._logger.info(f"plurks/    exists: {plurks_ok}")
         self._logger.info(f"responses/ exists: {responses_ok}")
 
-        self._append_log("🔍 檢查資料夾結構...")
+        self._append_log(t("log_checking_folders"))
         self._append_log(f"   {'✅' if plurks_ok    else '❌'} {plurks_dir}")
         self._append_log(f"   {'✅' if responses_ok else '❌'} {responses_dir}")
         self._append_log("")
 
         if not plurks_ok and not responses_ok:
-            self._append_log("⚠️ 找不到 plurks/ 與 responses/ 子資料夾，請確認所選的備份資料夾是否正確。")
+            self._append_log(t("log_warn_no_folders"))
             self._logger.error("Abort: neither plurks/ nor responses/ found")
             return
 
         if not plurks_ok:
-            self._append_log("💡 找不到 plurks/ 子資料夾，將只處理 responses/。")
+            self._append_log(t("log_warn_no_plurks"))
             self._logger.warning("plurks/ not found — processing responses/ only")
         if not responses_ok:
-            self._append_log("💡 找不到 responses/ 子資料夾，將只處理 plurks/。")
+            self._append_log(t("log_warn_no_responses"))
             self._logger.warning("responses/ not found — processing plurks/ only")
         self._append_log("")
 
-        self._start_btn.configure(state="disabled", text="執行中...")
+        self._start_btn.configure(state="disabled", text=t("btn_running"))
 
-        self._append_log("🚀 開始執行備份...")
-        self._append_log(f"   備份資料夾：{data_dir}")
-        self._append_log(f"   輸出資料夾：{output_root}")
-        self._append_log(f"   EXIF 補寫：{'是' if do_exif else '否'}")
+        self._append_log(t("log_start_backup"))
+        self._append_log(t("log_input_folder",  path=data_dir))
+        self._append_log(t("log_output_folder", path=output_root))
+        self._append_log(t("log_exif_label",    value=t("log_exif_enabled") if do_exif else t("log_exif_disabled")))
         self._append_log("")
 
-        # Mark run as active before spawning the thread
         self._running = True
 
-        # Run backup in background thread to keep UI responsive
         def worker():
-            # Step 1: Run prescan to count files that need to be downloaded
+            # Step 1: prescan to count files that need downloading
             try:
-                self._append_log("🔍 掃描新增圖片...")
+                self._append_log(t("log_scanning"))
                 prescan_stats: PrescanStats = run_full_prescan(
                     plurks_dir=plurks_dir,
                     responses_dir=responses_dir,
                     output_root=output_root,
                 )
 
-                total_new = prescan_stats.new_urls_count
+                total_new      = prescan_stats.new_urls_count
                 total_existing = prescan_stats.existing_files_count
 
                 self._logger.info(
                     f"Prescan result: new_urls={total_new} existing={total_existing}"
                 )
 
-                # Display file counts in label and log
-                files_text = f"準備下載 {total_new} 張新圖片，{total_existing} 張已存在"
+                files_text = t("log_scan_summary", new=total_new, existing=total_existing)
                 self._set_header_info(files_text)
-
-                self._append_log(f"掃描完成：{files_text}")
+                self._append_log(files_text)
                 self._append_log("")
 
             except Exception as e:
-                # Prescan failed — log error to file and UI, but proceed with backup anyway
                 self._logger.warning(f"Prescan failed: {type(e).__name__}: {e}")
-                self._append_log(f"⚠️ 掃描出錯，將繼續執行備份...")
+                self._append_log(t("log_scan_error"))
                 self._append_log("")
 
-            # Step 2: Run full backup (this is the main operation)
+            # Step 2: full backup
             stats: ProcessStats = run_full_backup(
                 plurks_dir=plurks_dir,
                 responses_dir=responses_dir,
@@ -663,7 +687,6 @@ class App(ctk.CTk):
 
     def _on_done(self, stats: ProcessStats):
         """Called on main thread when backup completes normally."""
-        # Mark run as finished — on_closing() will no longer show the dialog
         self._running = False
 
         self._progress.set(1)
@@ -672,7 +695,6 @@ class App(ctk.CTk):
         self._card_exif.set(stats.exif_updated)
         self._card_fail.set(stats.failed)
 
-        # Log final stats to file
         self._logger.info("--- Backup run completed ---")
         self._logger.info(f"Downloaded : {stats.downloaded}")
         self._logger.info(f"Skipped    : {stats.skipped}")
@@ -681,21 +703,25 @@ class App(ctk.CTk):
 
         self._append_log("")
         self._append_log("=" * 36)
-        self._append_log("✨ 備份完成！")
-        self._append_log(f"   📥 新下載：{stats.downloaded} 張")
-        self._append_log(f"   ⏭️  略過：{stats.skipped} 張")
-        self._append_log(f"   ❌ 失敗：{stats.failed} 張")
+        self._append_log(t("log_done_title"))
+        self._append_log(t("log_done_downloaded", count=stats.downloaded))
+        self._append_log(t("log_done_skipped",    count=stats.skipped))
+        self._append_log(t("log_done_failed",      count=stats.failed))
         if stats.exif_updated:
-            self._append_log(f"   🕒 EXIF 更新：{stats.exif_updated} 張")
+            self._append_log(t("log_done_exif",   count=stats.exif_updated))
         self._append_log("=" * 36)
 
-        self._start_btn.configure(state="normal", text="▶  開始備份")
+        self._start_btn.configure(state="normal", text=t("btn_start_backup"))
 
 
 # ==========================================
 # Entry point for GUI mode
 # ==========================================
 def main():
+    # Load persisted language config and initialize translations before UI is built
+    lang = load_config()
+    load_language(lang)
+
     app = App()
     app.mainloop()
 

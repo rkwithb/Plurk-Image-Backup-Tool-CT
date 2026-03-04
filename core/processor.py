@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from core.parser import parse_js_content, get_all_valid_images
 from core.downloader import download_image, DownloadResult, DELAY_BETWEEN_REQUESTS
 from core.logger import get_logger
+from core.i18n import t
 
 logger = get_logger()
 
@@ -30,10 +31,10 @@ class ProcessStats:
 
     def merge(self, other: "ProcessStats") -> "ProcessStats":
         """Merge another ProcessStats into this one and return self."""
-        self.downloaded  += other.downloaded
-        self.skipped     += other.skipped
+        self.downloaded   += other.downloaded
+        self.skipped      += other.skipped
         self.exif_updated += other.exif_updated
-        self.failed      += other.failed
+        self.failed       += other.failed
         return self
 
 
@@ -41,7 +42,7 @@ class ProcessStats:
 class PrescanStats:
     """
     Statistics from a pre-scan pass (read-only, no downloads).
-    new_urls_count:      total URLs that would be newly downloaded.
+    new_urls_count:       total URLs that would be newly downloaded.
     existing_files_count: total URLs pointing to files that already exist.
     """
     new_urls_count: int = 0
@@ -71,8 +72,7 @@ def prescan_folder(
         logger.debug(f"prescan_folder [{label}]: source dir not found, skipping — {source_dir}")
         return stats
 
-    # Collect all JS files
-    js_files = list(source_dir.glob("*.js"))
+    js_files    = list(source_dir.glob("*.js"))
     total_files = len(js_files)
 
     logger.debug(f"prescan_folder [{label}]: scanning {total_files} JS files")
@@ -87,8 +87,7 @@ def prescan_folder(
         for item in items:
             posted_date = item.get("posted", "")
             try:
-                dt = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
-                # Organize into dated subfolders (YYYY-MM-DD)
+                dt          = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
                 date_folder = output_root / dt.strftime("%Y-%m-%d")
             except ValueError:
                 logger.debug(
@@ -96,16 +95,13 @@ def prescan_folder(
                 )
                 continue
 
-            # Combine content and content_raw for image URL extraction
             content = (item.get("content", "") or "") + " " + (item.get("content_raw", "") or "")
-            urls = get_all_valid_images(content)
+            urls    = get_all_valid_images(content)
 
             for url in urls:
-                # Extract filename from URL, strip query string
                 file_name = url.split('/')[-1].split('?')[0]
                 save_path = date_folder / file_name
 
-                # Check if file already exists
                 if save_path.exists():
                     stats.existing_files_count += 1
                 else:
@@ -117,6 +113,7 @@ def prescan_folder(
     )
 
     return stats
+
 
 def process_folder(
     source_dir: Path,
@@ -148,12 +145,11 @@ def process_folder(
             on_log(msg)
 
     if not source_dir.exists():
-        ui_log(f"⚠️ 找不到「{label}」資料夾，略過處理。")
+        ui_log(t("proc_warn_no_source", label=label))
         logger.warning(f"process_folder: source dir not found, skipping — {source_dir}")
         return stats
 
-    # Collect all JS files first to support progress reporting
-    js_files = list(source_dir.glob("*.js"))
+    js_files    = list(source_dir.glob("*.js"))
     total_files = len(js_files)
 
     logger.info(f"process_folder [{label}]: start — {total_files} JS files in {source_dir}")
@@ -162,38 +158,33 @@ def process_folder(
         items = parse_js_content(js_file)
 
         if not items:
-            # parse_js_content already logged the reason — just note the skip here
             logger.debug(f"process_folder [{label}]: no items parsed from {js_file.name}, skipping")
             continue
 
-        ui_log(f"📂 [{label}] 正在處理：{js_file.name}")
+        ui_log(t("proc_processing_file", label=label, filename=js_file.name))
         logger.debug(f"process_folder [{label}]: processing {js_file.name} ({len(items)} items)")
 
         for item in items:
             posted_date = item.get("posted", "")
             try:
-                dt = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
-                # Organize into dated subfolders (YYYY-MM-DD)
+                dt          = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
                 date_folder = output_root / dt.strftime("%Y-%m-%d")
             except ValueError:
-                # Bad or missing date field — log for debugging, skip item silently in UI
                 logger.warning(
                     f"process_folder [{label}]: invalid date '{posted_date}' "
                     f"in {js_file.name} — item skipped"
                 )
                 continue
 
-            # Combine content and content_raw for image URL extraction
             content = (item.get("content", "") or "") + " " + (item.get("content_raw", "") or "")
-            urls = get_all_valid_images(content)
+            urls    = get_all_valid_images(content)
 
             for url in urls:
                 result: DownloadResult = download_image(url, date_folder, dt, do_exif)
 
                 if result.downloaded:
                     stats.downloaded += 1
-                    ui_log(f"  📥 下載完成：{url.split('/')[-1].split('?')[0]}")
-                    # Detailed log already written by downloader — no duplicate here
+                    ui_log(t("proc_downloaded", filename=url.split('/')[-1].split('?')[0]))
 
                 elif result.skipped:
                     stats.skipped += 1
@@ -201,14 +192,12 @@ def process_folder(
 
                 elif result.failed:
                     stats.failed += 1
-                    ui_log(f"  ❌ 下載失敗：{url}")
-                    # Failure detail (status code / exception) already logged by downloader
+                    ui_log(t("proc_failed", url=url))
 
                 if result.exif_updated:
                     stats.exif_updated += 1
-                    ui_log(f"  🕒 已更新 EXIF 圖檔時間：{url.split('/')[-1].split('?')[0]}")
+                    ui_log(t("proc_exif_updated", filename=url.split('/')[-1].split('?')[0]))
 
-        # Report progress after each JS file is processed
         if on_progress:
             on_progress(file_index + 1, total_files)
 
@@ -230,14 +219,14 @@ def run_full_prescan(
     Run prescan for both plurks and responses folders.
     Returns merged PrescanStats from both scans.
     """
-    logger.info(f"run_full_prescan: starting")
+    logger.info("run_full_prescan: starting")
 
-    plurks_stats = prescan_folder(plurks_dir, output_root, "主噗")
+    plurks_stats    = prescan_folder(plurks_dir,    output_root, "主噗")
     responses_stats = prescan_folder(responses_dir, output_root, "回應")
 
     merged = PrescanStats(
-        new_urls_count=plurks_stats.new_urls_count + responses_stats.new_urls_count,
-        existing_files_count=plurks_stats.existing_files_count + responses_stats.existing_files_count,
+        new_urls_count      = plurks_stats.new_urls_count      + responses_stats.new_urls_count,
+        existing_files_count= plurks_stats.existing_files_count + responses_stats.existing_files_count,
     )
 
     logger.info(

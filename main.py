@@ -11,6 +11,7 @@ from pathlib import Path
 from core.processor import run_full_backup
 from core.exif_handler import is_exif_available
 from core.logger import setup_logger, get_logger, shutdown_logger
+from core.i18n import load_config, load_language, t
 
 # ==========================================
 # Windows stdout robustness initialization
@@ -28,7 +29,7 @@ if sys.platform == "win32":
         sys.stdout = open(os.devnull, 'w')
 
 
-# --- 預設路徑設定 ---
+# --- Default path settings ---
 DEFAULT_PLURKS_DIR    = Path("data/plurks")
 DEFAULT_RESPONSES_DIR = Path("data/responses")
 DEFAULT_OUTPUT_ROOT   = Path("plurk_images_by_date")
@@ -49,6 +50,10 @@ def safe_input(prompt: str, default: str = "n") -> str:
 
 
 def main():
+    # Load persisted language config and initialize translations before any output
+    lang = load_config()
+    load_language(lang)
+
     # Initialize file logger at CLI launch — before any user interaction
     log_path = setup_logger(mode="CLI")
     logger   = get_logger()
@@ -63,12 +68,12 @@ def main():
 
     sys.excepthook = _cli_excepthook
 
-    print("🚀 噗浪 JS 備份圖檔整理工具")
-    print("=" * 40)
+    print(t("cli_title"))
+    print(t("cli_divider"))
 
     logger.info("CLI started")
 
-    # --- 資料夾設定 ---
+    # --- Folder settings ---
     plurks_dir    = DEFAULT_PLURKS_DIR
     responses_dir = DEFAULT_RESPONSES_DIR
     output_root   = DEFAULT_OUTPUT_ROOT
@@ -77,13 +82,13 @@ def main():
     logger.info(f"Input  responses : {responses_dir}")
     logger.info(f"Output root      : {output_root}")
 
-    # --- EXIF 選項 ---
+    # --- EXIF option ---
     do_exif = False
     if is_exif_available():
-        choice  = safe_input("👉 是否要檢查並補寫/覆蓋圖檔的 EXIF 圖片時間？(y/N)：")
+        choice  = safe_input(t("cli_exif_prompt"))
         do_exif = (choice == 'y')
     else:
-        print("💡 提示：未安裝 piexif 模組，將以純下載模式執行。")
+        print(t("cli_no_piexif"))
         logger.warning("piexif not available — running in download-only mode")
 
     logger.info(f"EXIF   : {do_exif}")
@@ -92,7 +97,6 @@ def main():
     # Use try/finally to guarantee shutdown_logger() is always called,
     # even if run_full_backup() raises an unexpected exception mid-run.
     try:
-        # --- 執行備份，log callback 直接 print ---
         logger.info("--- Backup run started ---")
         stats = run_full_backup(
             plurks_dir=plurks_dir,
@@ -100,19 +104,19 @@ def main():
             output_root=output_root,
             do_exif=do_exif,
             on_log=print,
-            on_progress=None,  # CLI mode does not use progress bar
+            on_progress=None,  # CLI mode does not use a progress bar
         )
 
-        # --- 結果摘要 ---
+        # --- Results summary ---
         print()
-        print("=" * 40)
-        print("✨ 備份整理結果：")
-        print(f"  📥 新下載圖片：{stats.downloaded} 張")
-        print(f"  ⏭️  略過已存在/過小圖片：{stats.skipped} 張")
-        print(f"  ❌ 下載失敗：{stats.failed} 張")
+        print(t("cli_divider"))
+        print(t("cli_result_title"))
+        print(t("cli_result_downloaded", count=stats.downloaded))
+        print(t("cli_result_skipped",    count=stats.skipped))
+        print(t("cli_result_failed",     count=stats.failed))
         if do_exif:
-            print(f"  🕒 覆寫/校正 EXIF 標頭：{stats.exif_updated} 張")
-        print("=" * 40)
+            print(t("cli_result_exif",   count=stats.exif_updated))
+        print(t("cli_divider"))
 
         logger.info("--- Backup run completed ---")
         logger.info(f"Downloaded : {stats.downloaded}")
