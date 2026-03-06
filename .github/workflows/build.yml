@@ -1,0 +1,191 @@
+# build.yml
+# Triggered by:
+#   - Push of a version tag (v*.*.*) — full build + GitHub Release
+#   - Manual workflow dispatch     — full build only, release step is skipped
+#
+# Jobs:
+#   lint    — flake8 + import check (ubuntu-latest, fast gate)
+#   build   — PyInstaller matrix across Linux / Windows / macOS (depends on lint)
+#   release — creates GitHub Release and attaches binaries (tag push only)
+
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+
+  # ── Lint & Import Check ────────────────────────────────────────────────────
+  # Repeated intentionally from test.yml — build should never assume
+  # test.yml already ran cleanly on the same commit.
+  lint:
+    name: Lint & Import Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Run flake8
+        run: |
+          flake8 core/ ui/ main.py \
+            --max-line-length 120 \
+            --exclude __pycache__
+
+      - name: Run import check
+        run: |
+          python -c "
+          import core.logger
+          import core.i18n
+          import core.parser
+          import core.downloader
+          import core.exif_handler
+          import core.processor
+          print('All core modules imported successfully.')
+          "
+
+  # ── PyInstaller Matrix Build ───────────────────────────────────────────────
+  build:
+    name: Build — ${{ matrix.os }}
+    needs: lint
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false   # let all platforms finish even if one fails
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: plurk-backup-linux
+            pyinstaller_args: >-
+              --onefile
+              --windowed
+              --name plurk-backup-linux
+              ui/app.py
+
+          - os: windows-latest
+            artifact_name: plurk-backup-win.exe
+            pyinstaller_args: >-
+              --onefile
+              --windowed
+              --name plurk-backup-win
+              ui/app.py
+
+          - os: macos-latest
+            artifact_name: plurk-backup-macos
+            pyinstaller_args: >-
+              --windowed
+              --name "Plurk Image Backup Tool"
+              ui/app.py
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # Linux — install tkinter system package (not bundled with Python on Ubuntu)
+      - name: Install tkinter (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y python3-tk
+
+      - name: Build with PyInstaller
+        run: pyinstaller ${{ matrix.pyinstaller_args }}
+
+      # macOS — PyInstaller produces a .app bundle directory under dist/
+      # Zip it so it can be uploaded as a single artifact file
+      - name: Zip .app bundle (macOS only)
+        if: runner.os == 'macOS'
+        run: |
+          echo "--- dist/ contents ---"
+          ls dist/
+          cd dist
+          zip -r plurk-backup-macos.zip "Plurk Image Backup Tool.app"
+
+      # Upload built binary as a workflow artifact (available for all trigger types)
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plurk-backup-linux
+          path: dist/plurk-backup-linux
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plurk-backup-win
+          path: dist/plurk-backup-win.exe
+
+      - name: Upload artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plurk-backup-macos
+          path: dist/plurk-backup-macos.zip
+
+  # ── GitHub Release ─────────────────────────────────────────────────────────
+  # Runs only when triggered by a version tag push.
+  # Skipped entirely on workflow_dispatch — use the artifacts from the build
+  # job directly from the Actions run summary page instead.
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: write   # required to create releases and upload assets
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plurk-backup-linux
+          path: artifacts/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plurk-backup-win
+          path: artifacts/
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plurk-backup-macos
+          path: artifacts/
+
+      - name: Create GitHub Release and upload binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/plurk-backup-linux
+            artifacts/plurk-backup-win.exe
+            artifacts/plurk-backup-macos.zip
