@@ -53,9 +53,9 @@ def _build_session_header(log_path: Path, mode: str) -> str:
     Build a structured session header block written at the top of each log file.
     Captures environment snapshot for easy debugging.
     """
-    now     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     os_info = f"{platform.system()} {platform.release()}"
-    py_ver  = platform.python_version()
+    py_ver = platform.python_version()
 
     lines = [
         "=" * 56,
@@ -100,18 +100,18 @@ def setup_logger(mode: str = "GUI") -> Path:
 
     # Build log folder path
     program_folder = _resolve_program_folder()
-    log_folder     = program_folder / "log"
+    log_folder = program_folder / "log"
     log_folder.mkdir(parents=True, exist_ok=True)
 
     # Timestamped session filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path  = log_folder / f"session_{timestamp}.log"
+    log_path = log_folder / f"session_{timestamp}.log"
 
     # Open file in line-buffered mode (buffering=1):
     # Each log line is flushed to disk immediately after writing.
     # Default FileHandler would buffer ~8KB in memory before flushing —
     # meaning the last N lines before a crash or force-kill could be lost.
-    log_file     = open(log_path, "a", encoding="utf-8", buffering=1)
+    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
     file_handler = logging.StreamHandler(log_file)
     file_handler.setLevel(logging.DEBUG)
 
@@ -121,8 +121,8 @@ def setup_logger(mode: str = "GUI") -> Path:
 
     # Log format: timestamp [LEVEL ] [module] message
     formatter = logging.Formatter(
-        fmt     = "%(asctime)s [%(levelname)-5s] [%(module)s] %(message)s",
-        datefmt = "%Y-%m-%d %H:%M:%S",
+        fmt="%(asctime)s [%(levelname)-5s] [%(module)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)

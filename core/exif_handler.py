@@ -48,9 +48,9 @@ def write_exif_time(file_path: Path, dt_obj: datetime) -> bool:
             return False
 
         # Update all three EXIF time fields for consistency
-        exif_dict["0th"][piexif.ImageIFD.DateTime]             = target_time_str
-        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal]     = target_time_str
-        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized]    = target_time_str
+        exif_dict["0th"][piexif.ImageIFD.DateTime] = target_time_str
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = target_time_str
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = target_time_str
         piexif.insert(piexif.dump(exif_dict), str(file_path))
 
         logger.debug(f"exif updated ({target_time_str}): {file_path.name}")

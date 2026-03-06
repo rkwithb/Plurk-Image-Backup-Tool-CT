@@ -2,6 +2,11 @@
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
 # Disclaimer: Use at your own risk. The author is not responsible for any damages.
 
+from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
+from core.logger import setup_logger, get_logger, shutdown_logger
+from core.exif_handler import is_exif_available
+from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
+import customtkinter as ctk
 import os
 import sys
 import threading
@@ -15,12 +20,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import customtkinter as ctk
-
-from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
-from core.exif_handler import is_exif_available
-from core.logger import setup_logger, get_logger, shutdown_logger
-from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
 
 # ==========================================
 # Theme & Appearance
@@ -31,27 +30,28 @@ ctk.set_default_color_theme("blue")
 # ==========================================
 # Colour palette — dark theme
 # ==========================================
-CLR_BG           = "#000000"   # main background
-CLR_PANEL        = "#1a1a1a"   # subtle panel background
-CLR_ACCENT       = "#ffffff"   # primary text / accent (light on dark)
-CLR_ACCENT2      = "#818cf8"   # blue accent for progress bar
-CLR_TEXT         = "#ffffff"   # primary text
-CLR_SUBTEXT      = "#cccccc"   # secondary / hint text
-CLR_SUCCESS      = "#16a34a"   # success green
-CLR_WARN         = "#d97706"   # warning amber
-CLR_ERROR        = "#dc2626"   # error red
-CLR_BORDER       = "#ffffff"   # nav-style border
-CLR_DIVIDER      = "#ffffff"   # stat row divider lines
+CLR_BG = "#000000"   # main background
+CLR_PANEL = "#1a1a1a"   # subtle panel background
+CLR_ACCENT = "#ffffff"   # primary text / accent (light on dark)
+CLR_ACCENT2 = "#818cf8"   # blue accent for progress bar
+CLR_TEXT = "#ffffff"   # primary text
+CLR_SUBTEXT = "#cccccc"   # secondary / hint text
+CLR_SUCCESS = "#16a34a"   # success green
+CLR_WARN = "#d97706"   # warning amber
+CLR_ERROR = "#dc2626"   # error red
+CLR_BORDER = "#ffffff"   # nav-style border
+CLR_DIVIDER = "#ffffff"   # stat row divider lines
 CLR_ENTRY_BORDER = "#555555"
-CLR_PROGRESS_BG  = "#2d2d2d"
-CLR_BTN_PRIMARY  = "#64748b"   # primary action button background
-CLR_BTN_HOVER    = "#333333"   # primary action button hover
+CLR_PROGRESS_BG = "#2d2d2d"
+CLR_BTN_PRIMARY = "#64748b"   # primary action button background
+CLR_BTN_HOVER = "#333333"   # primary action button hover
 
 
 class FolderRow(ctk.CTkFrame):
     """
     Reusable row widget: label + path entry + browse button.
     """
+
     def __init__(self, master, label: str, default_path: str = "",
                  on_change=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -111,6 +111,7 @@ class StatCard(ctk.CTkFrame):
     """
     Stat display card with subtle background and rounded corners.
     """
+
     def __init__(self, master, icon: str, label: str, color: str, **kwargs):
         super().__init__(master, fg_color=CLR_PANEL, corner_radius=10, **kwargs)
 
@@ -153,7 +154,7 @@ class App(ctk.CTk):
 
         # Initialize file logger at app launch — before any UI is built
         self._log_path = setup_logger(mode="GUI")
-        self._logger   = get_logger()
+        self._logger = get_logger()
         self._logger.info(f"App initialized — language={get_language()} UI starting up")
 
         # Register exception hooks before building UI so any init error is captured
@@ -204,7 +205,7 @@ class App(ctk.CTk):
             # Reset UI on the main thread — worker died without calling _on_done()
             self.after(0, self._on_worker_crash)
 
-        sys.excepthook       = _main_excepthook
+        sys.excepthook = _main_excepthook
         threading.excepthook = _thread_excepthook
 
     def _on_worker_crash(self):
@@ -365,8 +366,8 @@ class App(ctk.CTk):
         ).grid(row=0, column=1, pady=16, padx=8, sticky="w")
 
         # Language dropdown — right side of header
-        lang_options     = list(SUPPORTED_LANGUAGES.values())
-        current_label    = SUPPORTED_LANGUAGES.get(get_language(), lang_options[0])
+        lang_options = list(SUPPORTED_LANGUAGES.values())
+        current_label = SUPPORTED_LANGUAGES.get(get_language(), lang_options[0])
 
         self._lang_dropdown = ctk.CTkOptionMenu(
             header,
@@ -425,7 +426,7 @@ class App(ctk.CTk):
         exif_row = ctk.CTkFrame(panel, fg_color="transparent")
         exif_row.grid(row=4, column=0, sticky="w", padx=16, pady=(10, 14))
 
-        self._exif_var    = ctk.BooleanVar(value=False)
+        self._exif_var = ctk.BooleanVar(value=False)
         self._exif_switch = ctk.CTkSwitch(
             exif_row,
             text=t("exif_switch_label"),
@@ -498,12 +499,12 @@ class App(ctk.CTk):
         for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
-        self._card_dl   = StatCard(stats_row, "📥", t("stat_downloaded"), CLR_SUCCESS)
+        self._card_dl = StatCard(stats_row, "📥", t("stat_downloaded"), CLR_SUCCESS)
         self._card_skip = StatCard(stats_row, "⏭️",  t("stat_skipped"),    CLR_SUBTEXT)
         self._card_exif = StatCard(stats_row, "🕒", t("stat_exif"),        CLR_ACCENT2)
         self._card_fail = StatCard(stats_row, "❌", t("stat_failed"),      CLR_ERROR)
 
-        self._card_dl.grid  (row=0, column=0, sticky="ew", padx=(0, 6))
+        self._card_dl.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         self._card_skip.grid(row=0, column=1, sticky="ew", padx=3)
         self._card_exif.grid(row=0, column=2, sticky="ew", padx=3)
         self._card_fail.grid(row=0, column=3, sticky="ew", padx=(6, 0))
@@ -591,11 +592,11 @@ class App(ctk.CTk):
 
     def _start(self):
         """Validate inputs, reset UI, then launch backup in background thread."""
-        data_dir      = self._data_row.path
-        plurks_dir    = data_dir / "data" / "plurks"
+        data_dir = self._data_row.path
+        plurks_dir = data_dir / "data" / "plurks"
         responses_dir = data_dir / "data" / "responses"
-        output_root   = data_dir / "plurk_images_by_date"
-        do_exif       = self._exif_var.get()
+        output_root = data_dir / "plurk_images_by_date"
+        do_exif = self._exif_var.get()
 
         # Reset UI
         self._clear_log()
@@ -611,14 +612,14 @@ class App(ctk.CTk):
         self._logger.info(f"Output : {output_root}")
         self._logger.info(f"EXIF   : {do_exif}")
 
-        plurks_ok    = plurks_dir.exists()
+        plurks_ok = plurks_dir.exists()
         responses_ok = responses_dir.exists()
 
         self._logger.info(f"plurks/    exists: {plurks_ok}")
         self._logger.info(f"responses/ exists: {responses_ok}")
 
         self._append_log(t("log_checking_folders"))
-        self._append_log(f"   {'✅' if plurks_ok    else '❌'} {plurks_dir}")
+        self._append_log(f"   {'✅' if plurks_ok else '❌'} {plurks_dir}")
         self._append_log(f"   {'✅' if responses_ok else '❌'} {responses_dir}")
         self._append_log("")
 
@@ -655,7 +656,7 @@ class App(ctk.CTk):
                     output_root=output_root,
                 )
 
-                total_new      = prescan_stats.new_urls_count
+                total_new = prescan_stats.new_urls_count
                 total_existing = prescan_stats.existing_files_count
 
                 self._logger.info(

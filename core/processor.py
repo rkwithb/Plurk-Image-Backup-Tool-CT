@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from core.parser import parse_js_content, get_all_valid_images
-from core.downloader import download_image, DownloadResult, DELAY_BETWEEN_REQUESTS
+from core.downloader import download_image, DownloadResult
 from core.logger import get_logger
 from core.i18n import t
 
@@ -31,10 +31,10 @@ class ProcessStats:
 
     def merge(self, other: "ProcessStats") -> "ProcessStats":
         """Merge another ProcessStats into this one and return self."""
-        self.downloaded   += other.downloaded
-        self.skipped      += other.skipped
+        self.downloaded += other.downloaded
+        self.skipped += other.skipped
         self.exif_updated += other.exif_updated
-        self.failed       += other.failed
+        self.failed += other.failed
         return self
 
 
@@ -72,7 +72,7 @@ def prescan_folder(
         logger.debug(f"prescan_folder [{label}]: source dir not found, skipping — {source_dir}")
         return stats
 
-    js_files    = list(source_dir.glob("*.js"))
+    js_files = list(source_dir.glob("*.js"))
     total_files = len(js_files)
 
     logger.debug(f"prescan_folder [{label}]: scanning {total_files} JS files")
@@ -87,7 +87,7 @@ def prescan_folder(
         for item in items:
             posted_date = item.get("posted", "")
             try:
-                dt          = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
+                dt = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
                 date_folder = output_root / dt.strftime("%Y-%m-%d")
             except ValueError:
                 logger.debug(
@@ -96,7 +96,7 @@ def prescan_folder(
                 continue
 
             content = (item.get("content", "") or "") + " " + (item.get("content_raw", "") or "")
-            urls    = get_all_valid_images(content)
+            urls = get_all_valid_images(content)
 
             for url in urls:
                 file_name = url.split('/')[-1].split('?')[0]
@@ -149,7 +149,7 @@ def process_folder(
         logger.warning(f"process_folder: source dir not found, skipping — {source_dir}")
         return stats
 
-    js_files    = list(source_dir.glob("*.js"))
+    js_files = list(source_dir.glob("*.js"))
     total_files = len(js_files)
 
     logger.info(f"process_folder [{label}]: start — {total_files} JS files in {source_dir}")
@@ -167,7 +167,7 @@ def process_folder(
         for item in items:
             posted_date = item.get("posted", "")
             try:
-                dt          = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
+                dt = datetime.strptime(posted_date, "%a, %d %b %Y %H:%M:%S GMT")
                 date_folder = output_root / dt.strftime("%Y-%m-%d")
             except ValueError:
                 logger.warning(
@@ -177,7 +177,7 @@ def process_folder(
                 continue
 
             content = (item.get("content", "") or "") + " " + (item.get("content_raw", "") or "")
-            urls    = get_all_valid_images(content)
+            urls = get_all_valid_images(content)
 
             for url in urls:
                 result: DownloadResult = download_image(url, date_folder, dt, do_exif)
@@ -221,12 +221,12 @@ def run_full_prescan(
     """
     logger.info("run_full_prescan: starting")
 
-    plurks_stats    = prescan_folder(plurks_dir,    output_root, "主噗")
+    plurks_stats = prescan_folder(plurks_dir,    output_root, "主噗")
     responses_stats = prescan_folder(responses_dir, output_root, "回應")
 
     merged = PrescanStats(
-        new_urls_count      = plurks_stats.new_urls_count      + responses_stats.new_urls_count,
-        existing_files_count= plurks_stats.existing_files_count + responses_stats.existing_files_count,
+        new_urls_count=plurks_stats.new_urls_count + responses_stats.new_urls_count,
+        existing_files_count=plurks_stats.existing_files_count + responses_stats.existing_files_count,
     )
 
     logger.info(

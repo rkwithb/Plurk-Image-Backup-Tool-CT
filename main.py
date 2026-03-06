@@ -30,9 +30,9 @@ if sys.platform == "win32":
 
 
 # --- Default path settings ---
-DEFAULT_PLURKS_DIR    = Path("data/plurks")
+DEFAULT_PLURKS_DIR = Path("data/plurks")
 DEFAULT_RESPONSES_DIR = Path("data/responses")
-DEFAULT_OUTPUT_ROOT   = Path("plurk_images_by_date")
+DEFAULT_OUTPUT_ROOT = Path("plurk_images_by_date")
 
 
 def safe_input(prompt: str, default: str = "n") -> str:
@@ -66,7 +66,7 @@ def _parse_lang_flag() -> str | None:
 
     # --lang provided but no value follows it
     if idx + 1 >= len(args):
-        print(f"Usage: python main.py --lang <code>")
+        print("Usage: python main.py --lang <code>")
         print(f"Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}")
         sys.exit(1)
 
@@ -95,8 +95,8 @@ def main():
     load_language(lang)
 
     # Initialize file logger at CLI launch — before any user interaction
-    log_path = setup_logger(mode="CLI")
-    logger   = get_logger()
+    setup_logger(mode="CLI")
+    logger = get_logger()
 
     # Register excepthook so unhandled exceptions are captured in the log file.
     # In CLI mode there is no worker thread, so threading.excepthook is not needed.
@@ -115,9 +115,9 @@ def main():
     logger.info(f"Language : {lang}{' (--lang flag)' if lang_flag else ' (config)'}")
 
     # --- Folder settings ---
-    plurks_dir    = DEFAULT_PLURKS_DIR
+    plurks_dir = DEFAULT_PLURKS_DIR
     responses_dir = DEFAULT_RESPONSES_DIR
-    output_root   = DEFAULT_OUTPUT_ROOT
+    output_root = DEFAULT_OUTPUT_ROOT
 
     logger.info(f"Input  plurks    : {plurks_dir}")
     logger.info(f"Input  responses : {responses_dir}")
@@ -126,7 +126,7 @@ def main():
     # --- EXIF option ---
     do_exif = False
     if is_exif_available():
-        choice  = safe_input(t("cli_exif_prompt"))
+        choice = safe_input(t("cli_exif_prompt"))
         do_exif = (choice == 'y')
     else:
         print(t("cli_no_piexif"))

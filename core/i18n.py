@@ -68,22 +68,22 @@ def load_language(lang: str) -> None:
     global _translations, _current_language
 
     locales_folder = _resolve_locales_folder()
-    locale_file    = locales_folder / f"{lang}.json"
+    locale_file = locales_folder / f"{lang}.json"
 
     if not locale_file.exists():
         logger.warning(f"i18n: locale file not found for '{lang}' — falling back to zh_TW")
-        lang         = "zh_TW"
-        locale_file  = locales_folder / "zh_TW.json"
+        lang = "zh_TW"
+        locale_file = locales_folder / "zh_TW.json"
 
     try:
         with open(locale_file, "r", encoding="utf-8") as f:
-            _translations    = json.load(f)
+            _translations = json.load(f)
             _current_language = lang
             logger.debug(f"i18n: loaded '{lang}' ({len(_translations)} keys)")
 
     except Exception as e:
         logger.error(f"i18n: failed to load locale file '{locale_file}' — {type(e).__name__}: {e}")
-        _translations    = {}
+        _translations = {}
         _current_language = lang
 
 
@@ -129,7 +129,7 @@ def load_config() -> str:
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-            lang   = config.get("language", "zh_TW")
+            lang = config.get("language", "zh_TW")
 
             if lang not in SUPPORTED_LANGUAGES:
                 logger.warning(f"i18n: unknown language '{lang}' in config — falling back to zh_TW")
