@@ -1,13 +1,9 @@
 # Copyright (c) 2026 rkwithb (https://github.com/rkwithb)
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
 # Disclaimer: Use at your own risk. The author is not responsible for any damages.
-
-from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
-from core.logger import setup_logger, get_logger, shutdown_logger
-from core.exif_handler import is_exif_available
-from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
+#--------------------
 import customtkinter as ctk
-import os
+import subprocess
 import sys
 import threading
 import traceback
@@ -19,6 +15,15 @@ from tkinter import filedialog
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
+from core.logger import setup_logger, get_logger, shutdown_logger
+from core.exif_handler import is_exif_available
+from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
+
+
+
 
 
 # ==========================================
@@ -320,6 +325,10 @@ class App(ctk.CTk):
         """
         Called when the user selects a new language from the dropdown.
         Saves the selection to config.json and restarts the app to apply.
+
+        Uses subprocess.Popen() + destroy() instead of os.execv() because
+        os.execv() does not work correctly in a PyInstaller frozen binary —
+        the temp extraction directory (_MEI*) is no longer valid on relaunch.
         """
         # Resolve selected language code from display label
         selected_lang = next(
@@ -334,8 +343,10 @@ class App(ctk.CTk):
         save_config(selected_lang)
         shutdown_logger(reason="language_change")
 
-        # Relaunch the process with the same arguments
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # Launch a fresh instance of the app before exiting the current one.
+        # Works correctly in both frozen binary and source modes.
+        subprocess.Popen([sys.executable] + sys.argv)
+        self.destroy()
 
     # ------------------------------------------------------------------
     # UI Construction
