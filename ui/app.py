@@ -1,7 +1,7 @@
 # Copyright (c) 2026 rkwithb (https://github.com/rkwithb)
 # Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
 # Disclaimer: Use at your own risk. The author is not responsible for any damages.
-#--------------------
+# --------------------
 import customtkinter as ctk
 import subprocess
 import sys
@@ -16,15 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-
 from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
 from core.logger import setup_logger, get_logger, shutdown_logger
 from core.exif_handler import is_exif_available
 from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
-
-
-
-
 
 # ==========================================
 # Theme & Appearance
