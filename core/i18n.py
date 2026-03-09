@@ -36,25 +36,28 @@ SUPPORTED_LANGUAGES: dict[str, str] = {
 }
 
 
-def _resolve_program_folder() -> Path:
+def _resolve_locales_folder() -> Path:
     """
-    Resolve the folder containing the running program.
-    Mirrors the same frozen/script logic used in logger.py.
+    Resolve the locales/ folder.
+    - Frozen binary: bundled data is extracted to sys._MEIPASS by PyInstaller
+    - Script mode:   locales/ sits under the project root
     """
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        return Path(sys._MEIPASS) / "locales"
     else:
-        return Path(__file__).resolve().parent.parent
-
-
-def _resolve_locales_folder() -> Path:
-    """Resolve the locales/ folder inside the program folder."""
-    return _resolve_program_folder() / "locales"
+        return Path(__file__).resolve().parent.parent / "locales"
 
 
 def _resolve_config_path() -> Path:
-    """Resolve the config.json path inside the program folder."""
-    return _resolve_program_folder() / "config.json"
+    """
+    Resolve config.json path.
+    - Frozen binary: stored next to the binary on disk (user-writable, persistent)
+    - Script mode:   stored at the project root
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "config.json"
+    else:
+        return Path(__file__).resolve().parent.parent / "config.json"
 
 
 def load_language(lang: str) -> None:

@@ -4,6 +4,7 @@
 # --------------------
 import customtkinter as ctk
 import subprocess
+import os
 import sys
 import threading
 import traceback
@@ -315,17 +316,16 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------
     # Language switcher
     # ------------------------------------------------------------------
-
     def _on_language_change(self, display_label: str):
         """
         Called when the user selects a new language from the dropdown.
         Saves the selection to config.json and restarts the app to apply.
 
-        Uses subprocess.Popen() + destroy() instead of os.execv() because
-        os.execv() does not work correctly in a PyInstaller frozen binary —
-        the temp extraction directory (_MEI*) is no longer valid on relaunch.
+        When frozen (PyInstaller --onefile), PYINSTALLER_RESET_ENVIRONMENT=1
+        must be set in the child environment so PyInstaller treats the new
+        process as a fresh top-level launch rather than inheriting the parent's
+        _MEI temp directory context, which causes Tcl/Tk initialisation to fail.
         """
-        # Resolve selected language code from display label
         selected_lang = next(
             (code for code, label in SUPPORTED_LANGUAGES.items() if label == display_label),
             None
@@ -338,9 +338,16 @@ class App(ctk.CTk):
         save_config(selected_lang)
         shutdown_logger(reason="language_change")
 
-        # Launch a fresh instance of the app before exiting the current one.
-        # Works correctly in both frozen binary and source modes.
-        subprocess.Popen([sys.executable] + sys.argv)
+        # Frozen binary: set PYINSTALLER_RESET_ENVIRONMENT to ensure the child
+        # process bootstraps cleanly without inheriting the parent's _MEI context.
+        # Source mode: pass sys.argv so the correct script path is included.
+        if getattr(sys, "frozen", False):
+            env = os.environ.copy()
+            env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"  # force child to treat itself as a fresh top-level process
+            subprocess.Popen([sys.executable], env=env)
+        else:
+            subprocess.Popen([sys.executable] + sys.argv)
+
         self.destroy()
 
     # ------------------------------------------------------------------

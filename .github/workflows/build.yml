@@ -73,7 +73,6 @@ jobs:
               --windowed
               --name plurk-backup-linux
               --add-data "locales:locales"
-              --add-data "config.json:."
               ui/app.py
 
           - os: windows-latest
@@ -83,7 +82,6 @@ jobs:
               --windowed
               --name plurk-backup-win
               --add-data "locales;locales"
-              --add-data "config.json;."
               ui/app.py
 
           - os: macos-latest
@@ -92,7 +90,6 @@ jobs:
               --windowed
               --name "Plurk Image Backup Tool"
               --add-data "locales:locales"
-              --add-data "config.json:."
               ui/app.py
 
     steps:
