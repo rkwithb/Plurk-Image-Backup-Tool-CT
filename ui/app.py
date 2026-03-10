@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.i18n import load_config, load_language, save_config, get_language, t, SUPPORTED_LANGUAGES
-from core.logger import setup_logger, get_logger, shutdown_logger
+from core.logger import setup_logger, get_logger, shutdown_logger, _get_existing_log_path
 from core.exif_handler import is_exif_available
 from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
 
@@ -153,8 +153,9 @@ class App(ctk.CTk):
         # Used by on_closing() to decide whether to show the confirmation dialog.
         self._running: bool = False
 
-        # Initialize file logger at app launch — before any UI is built
-        self._log_path = setup_logger(mode="GUI")
+        # Logger already initialized in main() before App is constructed
+        self._logger   = get_logger()
+        self._log_path = _get_existing_log_path(self._logger)
         self._logger = get_logger()
         self._logger.info(f"App initialized — language={get_language()} UI starting up")
 
@@ -732,8 +733,11 @@ class App(ctk.CTk):
 # Entry point for GUI mode
 # ==========================================
 def main():
-    # Load persisted language config and initialize translations before UI is built
+    # Initialize logger first — before i18n, so load_config/load_language
+    # warnings are captured in the log file
+    setup_logger(mode="GUI")  # logger ready first
     lang = load_config()
+    # Load persisted language config and initialize translations before UI is built
     load_language(lang)
 
     app = App()
