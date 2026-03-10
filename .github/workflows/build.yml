@@ -112,8 +112,38 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y python3-tk
 
+      # Write core/version.py so the frozen binary can report its version.
+      # Uses the git tag on tag-push triggers, or the branch name on workflow_dispatch.
+      # This file is not committed to the repo — it is generated here at build time only.
+      - name: Write version file
+        shell: bash
+        run: |
+          echo "VERSION = \"${{ github.ref_name }}\"" > core/version.py
+
       - name: Build with PyInstaller
         run: pyinstaller ${{ matrix.pyinstaller_args }}
+
+      # Verify the frozen binary starts cleanly and the sys.frozen path in
+      # logger.py resolves correctly. --version exits before any GUI or log
+      # file is created, so this is a pure startup + import smoke test.
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x dist/plurk-backup-linux
+          dist/plurk-backup-linux --version
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: dist/plurk-backup-win.exe --version
+
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "--- dist/ contents ---"
+          ls dist/
+          binary="dist/Plurk Image Backup Tool.app/Contents/MacOS/Plurk Image Backup Tool"
+          chmod +x "$binary"
+          "$binary" --version
 
       # macOS — PyInstaller produces a .app bundle directory under dist/
       # Zip it so it can be uploaded as a single artifact file

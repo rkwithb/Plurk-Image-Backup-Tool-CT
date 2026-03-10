@@ -22,6 +22,13 @@ from core.logger import setup_logger, get_logger, shutdown_logger, _get_existing
 from core.exif_handler import is_exif_available
 from core.processor import run_full_backup, run_full_prescan, ProcessStats, PrescanStats
 
+# Version is generated at build time by CI (core/version.py).
+# Falls back to "dev" in local source runs where the file does not exist.
+try:
+    from core.version import VERSION
+except ImportError:
+    VERSION = "dev"
+
 # ==========================================
 # Theme & Appearance
 # ==========================================
@@ -733,6 +740,13 @@ class App(ctk.CTk):
 # Entry point for GUI mode
 # ==========================================
 def main():
+    # Intercept --version before any side effects (logger, i18n, GUI init).
+    # No log file is created, no GUI is launched.
+    # Used by CI smoke tests to verify the frozen binary starts cleanly.
+    if "--version" in sys.argv:
+        print(f"PIBT v{VERSION}")
+        sys.exit(0)
+
     # Initialize logger first — before i18n, so load_config/load_language
     # warnings are captured in the log file
     setup_logger(mode="GUI")  # logger ready first
