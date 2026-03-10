@@ -740,8 +740,7 @@ class App(ctk.CTk):
 # Entry point for GUI mode
 # ==========================================
 def main():
-    # Intercept --version before any side effects (logger, i18n, GUI init).
-    # No log file is created, no GUI is launched.
+    # Intercept --version before logger/i18n/GUI init — no side effects.
     # Used by CI smoke tests to verify the frozen binary starts cleanly.
     if "--version" in sys.argv:
         print(f"PIBT v{VERSION}")
