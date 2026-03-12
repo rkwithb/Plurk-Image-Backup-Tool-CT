@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 💬 使用問題 / Usage Questions
+  - name: 💬 使用疑問，閒聊 / Usage Questions, Free Talk
     url: https://github.com/rkwithb/Plurk-Image-Backup-Tool-CT/discussions
     about: |
-      使用上的疑問請到 Discussions 發問。
+      使用上的疑問可以到 Discussions 發問。
       For general usage questions, please use Discussions instead.
