@@ -1,4 +1,4 @@
-ISSUE_TEMPLATEISSUE_TEMPLATEname: "🐛 回報問題 / Report a Problem"
+name: "🐛 回報問題 / Report a Problem"
 description: |
   遇到任何問題都可以在這裡回報。
   Use this template to report any issue you've encountered.
