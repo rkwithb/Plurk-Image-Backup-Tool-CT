@@ -120,21 +120,16 @@ class StatCard(ctk.CTkFrame):
     Stat display card with subtle background and rounded corners.
     """
 
-    def __init__(self, master, icon: str, label: str, color: str, **kwargs):
+    def __init__(self, master, label: str, color: str, **kwargs):
         super().__init__(master, fg_color=CLR_PANEL, corner_radius=10, **kwargs)
 
         self._var = ctk.StringVar(value="0")
 
         ctk.CTkLabel(
-            self, text=icon,
-            font=ctk.CTkFont(size=22),
-        ).pack(pady=(12, 0))
-
-        ctk.CTkLabel(
             self, textvariable=self._var,
             font=ctk.CTkFont(size=28, weight="bold"),
             text_color=color,
-        ).pack()
+        ).pack(pady=(12, 0))
 
         ctk.CTkLabel(
             self, text=label,
@@ -520,11 +515,10 @@ class App(ctk.CTk):
         for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
-        self._card_dl = StatCard(stats_row, "📥", t("stat_downloaded"), CLR_SUCCESS)
-        self._card_skip = StatCard(stats_row, "⏭️",  t("stat_skipped"),    CLR_SUBTEXT)
-        self._card_exif = StatCard(stats_row, "🕒", t("stat_exif"),        CLR_ACCENT2)
-        self._card_fail = StatCard(stats_row, "❌", t("stat_failed"),      CLR_ERROR)
-
+        self._card_dl   = StatCard(stats_row, t("stat_downloaded"), CLR_SUCCESS)
+        self._card_skip = StatCard(stats_row, t("stat_skipped"),    CLR_SUBTEXT)
+        self._card_exif = StatCard(stats_row, t("stat_exif"),       CLR_ACCENT2)
+        self._card_fail = StatCard(stats_row, t("stat_failed"),     CLR_ERROR)
         self._card_dl.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         self._card_skip.grid(row=0, column=1, sticky="ew", padx=3)
         self._card_exif.grid(row=0, column=2, sticky="ew", padx=3)
@@ -640,8 +634,8 @@ class App(ctk.CTk):
         self._logger.info(f"responses/ exists: {responses_ok}")
 
         self._append_log(t("log_checking_folders"))
-        self._append_log(f"   {'✅' if plurks_ok else '❌'} {plurks_dir}")
-        self._append_log(f"   {'✅' if responses_ok else '❌'} {responses_dir}")
+        self._append_log(f"   {'[OK]' if plurks_ok else '[NG]'} {plurks_dir}")
+        self._append_log(f"   {'[OK]' if responses_ok else '[NG]'} {responses_dir}")
         self._append_log("")
 
         if not plurks_ok and not responses_ok:
