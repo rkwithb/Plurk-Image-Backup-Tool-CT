@@ -118,7 +118,13 @@ def download_image(
     Returns a DownloadResult dataclass.
     """
     # Extract filename from URL, strip query string
-    file_name = url.split('/')[-1].split('?')[0]
+    raw_name = url.split('/')[-1].split('?')[0]
+    file_name = Path(raw_name).name  # strip any directory components (defence-in-depth)
+
+    if not file_name:
+        logger.warning(f"download skipped (empty filename after sanitisation): {url}")
+        return DownloadResult(skipped=True)
+
     save_path = target_folder / file_name
     target_folder.mkdir(exist_ok=True, parents=True)
 
