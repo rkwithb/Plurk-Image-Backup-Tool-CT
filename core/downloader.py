@@ -117,6 +117,14 @@ def download_image(
 
     Returns a DownloadResult dataclass.
     """
+    # Reject non-HTTP(S) schemes as a defence-in-depth guard against SSRF.
+    # Under normal usage all URLs come from get_all_valid_images() which already
+    # enforces the https?:// scheme via regex, but download_image() is a public
+    # function and future callers may not apply the same pre-validation.
+    if not url.startswith(("http://", "https://")):
+        logger.warning(f"download skipped (invalid scheme): {url}")
+        return DownloadResult(skipped=True)
+
     # Extract filename from URL, strip query string
     raw_name = url.split('/')[-1].split('?')[0]
     file_name = Path(raw_name).name  # strip any directory components (defence-in-depth)
