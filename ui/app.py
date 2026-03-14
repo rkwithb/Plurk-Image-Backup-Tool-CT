@@ -142,7 +142,7 @@ class StatCard(ctk.CTkFrame):
 
 
 class App(ctk.CTk):
-    def __init__(self):
+    def __init__(self, cleanup_msg: str | None = None):
         super().__init__()
 
         self.title(t("header_title"))
@@ -165,6 +165,11 @@ class App(ctk.CTk):
         self._register_exception_hooks()
 
         self._build_ui()
+
+        # Show log retention message at the top of the log window if old
+        # session files were deleted during setup_logger() at this launch.
+        if cleanup_msg:
+            self._append_log(cleanup_msg)
 
         # Hook window close button to our controlled shutdown handler
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
@@ -742,12 +747,12 @@ def main():
 
     # Initialize logger first — before i18n, so load_config/load_language
     # warnings are captured in the log file
-    setup_logger(mode="GUI")  # logger ready first
+    log_path, cleanup_msg = setup_logger(mode="GUI")  # logger ready first
     lang = load_config()
     # Load persisted language config and initialize translations before UI is built
     load_language(lang)
 
-    app = App()
+    app = App(cleanup_msg=cleanup_msg)
     app.mainloop()
 
 

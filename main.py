@@ -95,8 +95,12 @@ def main():
     load_language(lang)
 
     # Initialize file logger at CLI launch — before any user interaction
-    setup_logger(mode="CLI")
+    log_path, cleanup_msg = setup_logger(mode="CLI")
     logger = get_logger()
+
+    # Print log retention message if old session files were deleted at this launch
+    if cleanup_msg:
+        print(cleanup_msg)
 
     # Register excepthook so unhandled exceptions are captured in the log file.
     # In CLI mode there is no worker thread, so threading.excepthook is not needed.

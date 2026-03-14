@@ -20,6 +20,12 @@ Buffering strategy:
   on disk before the next one is written — critical for crash/kill scenarios
   where a full-buffer flush would never happen.
   Performance impact is negligible since the bottleneck is network I/O, not disk.
+
+Log retention:
+  setup_logger() keeps the most recent MAX_SESSION_LOGS session files.
+  Older files are deleted at launch before the new session file is created.
+  A retention summary is always written to the new session log.
+  The cleanup message is returned to the caller for display in the UI or CLI.
 """
 
 import logging
@@ -33,6 +39,10 @@ _LOGGER_NAME = "plurk_dl"
 
 # Tracks whether setup_logger() has already been called
 _initialized = False
+
+# Maximum number of session log files to keep on disk.
+# When exceeded, the oldest files are deleted at the next launch.
+MAX_SESSION_LOGS = 20
 
 
 def _resolve_program_folder() -> Path:
@@ -70,7 +80,46 @@ def _build_session_header(log_path: Path, mode: str) -> str:
     return "\n".join(lines)
 
 
-def setup_logger(mode: str = "GUI") -> Path:
+def _cleanup_old_logs(log_folder: Path, logger: logging.Logger) -> str | None:
+    """
+    Delete the oldest session log files if the total count exceeds MAX_SESSION_LOGS.
+    Called from setup_logger() after the new session file is created.
+
+    Writes a retention summary to the log file:
+      - Always: one line with the total count of existing files found.
+      - Only if files were deleted: one line listing the deleted filenames.
+
+    Returns a human-readable cleanup message string if files were deleted,
+    or None if no deletion was necessary. The caller (GUI or CLI) uses this
+    to surface the message to the user.
+    """
+    session_files = sorted(log_folder.glob("session_*.log"))
+    total = len(session_files)
+
+    logger.info(f"Log retention: {total} session file(s) found (max {MAX_SESSION_LOGS})")
+
+    if total <= MAX_SESSION_LOGS:
+        return None
+
+    to_delete = session_files[:total - MAX_SESSION_LOGS]
+    deleted_names = []
+
+    for f in to_delete:
+        try:
+            f.unlink()
+            deleted_names.append(f.name)
+        except OSError as e:
+            logger.warning(f"Log retention: failed to delete {f.name} — {e}")
+
+    if deleted_names:
+        names_str = ", ".join(deleted_names)
+        logger.info(f"Log retention: deleted {len(deleted_names)} old session file(s): {names_str}")
+        return f"[log] Deleted {len(deleted_names)} old session log file(s): {names_str}"
+
+    return None
+
+
+def setup_logger(mode: str = "GUI") -> tuple[Path, str | None]:
     """
     Initialize the singleton file logger. Should be called exactly once at app launch.
 
@@ -78,7 +127,11 @@ def setup_logger(mode: str = "GUI") -> Path:
         mode: "GUI" or "CLI" — recorded in the session header for context.
 
     Returns:
-        Path to the log file created for this session.
+        (log_path, cleanup_msg) where:
+          log_path:    Path to the log file created for this session.
+          cleanup_msg: Human-readable string if old log files were deleted,
+                       or None if no cleanup was necessary. The caller should
+                       display this to the user (UI log window top / CLI print).
 
     Behaviour:
         - Creates <program_folder>/log/ if it does not exist.
@@ -86,7 +139,8 @@ def setup_logger(mode: str = "GUI") -> Path:
         - Opens the file in line-buffered mode (buffering=1) so every line
           is written to disk immediately — safe against crashes and force-kills.
         - Writes a session header block as the first entry.
-        - Subsequent calls are no-ops (returns the existing log path).
+        - Runs log retention cleanup (keeps MAX_SESSION_LOGS most recent files).
+        - Subsequent calls are no-ops (returns the existing log path and None).
     """
     global _initialized
 
@@ -94,7 +148,7 @@ def setup_logger(mode: str = "GUI") -> Path:
 
     # Guard: do not re-initialize if already set up
     if _initialized:
-        return _get_existing_log_path(logger)
+        return _get_existing_log_path(logger), None
 
     logger.setLevel(logging.DEBUG)
 
@@ -131,8 +185,11 @@ def setup_logger(mode: str = "GUI") -> Path:
     header = _build_session_header(log_path, mode)
     logger.info("\n" + header)
 
+    # Run log retention cleanup and capture any deletion message for the caller
+    cleanup_msg = _cleanup_old_logs(log_folder, logger)
+
     _initialized = True
-    return log_path
+    return log_path, cleanup_msg
 
 
 def shutdown_logger(reason: str = "normal") -> None:
