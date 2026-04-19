@@ -144,6 +144,6 @@ Plurk-Image-Backup-Tool-CT/
 
 ## 授權條款
 
-本專案採用 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 授權，僅限非商業使用。
+本專案採用 [Apache License 2.0](https://creativecommons.org/licenses/by-nc/4.0/) 授權，僅限非商業使用。
 
 > 免責聲明：使用風險自負，作者不對任何損失負責。

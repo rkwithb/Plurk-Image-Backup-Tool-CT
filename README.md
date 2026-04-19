@@ -15,4 +15,4 @@
 
 ## License
 
-Licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — Non-commercial use only.
+Licensed under [Apache License 2.0](https://creativecommons.org/licenses/by-nc/4.0/) — Non-commercial use only.

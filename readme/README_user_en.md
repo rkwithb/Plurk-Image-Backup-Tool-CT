@@ -114,6 +114,6 @@ Already-downloaded images are automatically skipped. It is safe to run the tool 
 
 ## License
 
-Licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — Non-commercial use only.
+Licensed under [Apache License 2.0](https://creativecommons.org/licenses/by-nc/4.0/) — Non-commercial use only.
 
 > Disclaimer: Use at your own risk. The author is not responsible for any damages.
