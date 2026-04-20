@@ -18,7 +18,6 @@ limitations under the License.
 
 非正式翻譯 — 參考用
 
-版權 2026 rkwithb
 
 本檔案依據 Apache License 第 2.0 版授權（下稱「授權」）；您使用本檔案即表示同意遵守該授權之條款。
 授權原文請見： http://www.apache.org/licenses/LICENSE-2.0
